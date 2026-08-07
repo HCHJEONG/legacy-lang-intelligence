@@ -6,7 +6,7 @@ The MVP is feasible in this repository because the folder is currently empty and
 
 The full original scope is large, so the first implementation should prioritize a thin but end-to-end path:
 
-CardDemo discovery -> deterministic entity/dependency extraction -> SQLite persistence -> System Map -> Source Viewer -> Ask AI answer with evidence and verified visualization.
+CardDemo source strategy -> discovery -> deterministic entity/dependency extraction -> SQLite persistence -> System Map -> Source Viewer -> Ask AI answer with evidence and verified visualization.
 
 ## MVP Steps
 
@@ -25,23 +25,7 @@ Initial requirements:
 
 Before implementation, verify current official package/API recommendations where version-sensitive.
 
-### 2. Add Persistence And Schema
-
-Add SQLite with Drizzle ORM.
-
-Minimum tables:
-
-- `projects`
-- `source_files`
-- `entities`
-- `dependencies`
-- `source_locations`
-- `analysis_runs`
-- `ai_explanations`
-
-Use JSON metadata columns where helpful, but keep entity and dependency types explicit enough for graph queries.
-
-### 3. Build CardDemo Fixture / Clone Strategy
+### 2. Build CardDemo Fixture / Clone Strategy
 
 Do not blindly copy the full AWS CardDemo repository into this project.
 
@@ -52,7 +36,9 @@ Implement a controlled ingestion source strategy:
 - allow the ingestion path to be configured by environment variable or CLI option;
 - support rerunning ingestion from a clean checkout.
 
-### 4. Implement File Discovery And Classification
+This should happen before finalizing the persistence schema, because the actual CardDemo directory structure and artifact types should shape the first database model.
+
+### 3. Implement File Discovery And Classification
 
 Build `npm run ingest` around a script such as `scripts/ingest-carddemo.ts`.
 
@@ -65,7 +51,7 @@ The script should:
 
 Classification should be conservative. Unknown files should be stored but not overinterpreted.
 
-### 5. Implement Minimal Static Analysis
+### 4. Implement Minimal Static Analysis
 
 Start with deterministic extraction instead of full compiler-grade parsing.
 
@@ -96,6 +82,24 @@ JCL extraction:
 - execution order
 
 Each extracted relationship must include source evidence and a confidence value.
+
+### 5. Add Persistence And Schema
+
+Add SQLite with Drizzle ORM after the first pass of discovery and static analysis has clarified the actual CardDemo artifact types and extracted relationship shapes.
+
+Minimum tables:
+
+- `projects`
+- `source_files`
+- `entities`
+- `dependencies`
+- `source_locations`
+- `analysis_runs`
+- `ai_explanations`
+
+Use JSON metadata columns where helpful, but keep entity and dependency types explicit enough for graph queries.
+
+The initial schema should be validated against both the real CardDemo source layout and the minimal static analysis output from steps 3 and 4.
 
 ### 6. Persist Entities, Dependencies, And Evidence
 
@@ -191,4 +195,3 @@ The LLM must not generate factual graph edges. It may only explain verified grap
 - Monaco Editor;
 - advanced AI tool calling if simple server-side routing is enough;
 - automatic DB2/VSAM inference beyond statically verified evidence.
-
