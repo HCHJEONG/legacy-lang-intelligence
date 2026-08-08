@@ -1,5 +1,6 @@
 import { fetchPublicGithubRepository } from "@/lib/ingestion/github-fetcher";
 import { parseGithubRepository } from "@/lib/ingestion/github-url";
+import { analyzeAndPersistSource } from "@/lib/ingestion/analyze-source";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { url?: string; access?: "public" | "private" | "restricted" };
@@ -11,7 +12,8 @@ export async function POST(request: Request) {
 
   try {
     const manifest = await fetchPublicGithubRepository(url);
-    return Response.json({ status: "fetched", message: "Public repository fetched into an isolated analysis workspace.", policy: "The repository is treated as source input only; repository code is never executed.", manifest });
+    const result = await analyzeAndPersistSource(manifest.sourceRoot);
+    return Response.json({ status: "completed", message: "Public repository fetched, analyzed, and persisted.", policy: "The repository is treated as source input only; repository code is never executed.", manifest, analysis: { runId: result.persistence.runId, entities: result.normalized.entities.length, relations: result.normalized.relations.length, unresolved: result.normalized.coverage.unresolvedCount } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Repository fetch failed." }, { status: 422 });
   }

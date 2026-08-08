@@ -521,9 +521,10 @@ Current result:
 - `src/app/api/ingest/route.ts` validates public GitHub repository URLs, fetches public repositories, and returns an explicit contact branch for private or source-restricted requests.
 - `src/components/repository-ingestion-panel.tsx` makes source handling and the no-code-execution policy visible before ingestion.
 - `src/lib/ingestion/github-fetcher.ts` resolves HEAD with `git ls-remote`, performs a depth-one detached clone, applies file/size limits, ignores `.git`, `node_modules`, and symbolic links, and returns a repository manifest.
+- `src/lib/ingestion/analyze-source.ts` reuses the existing discovery, baseline analyzer, Normalized IR adapter, and SQLite persistence pipeline for a fetched source root.
 - `src/lib/ingestion/github-url.ts` and `src/lib/ingestion/limits.ts` define the accepted URL shape and safety limits.
 - The fetch layer has been smoke-tested against a public GitHub repository and recorded its commit SHA and file manifest.
-- Analysis pipeline execution, run progress, commit-pinned SQLite persistence, and cleanup policy remain the next implementation slice of this stage.
+- The public ingestion endpoint now completes fetch, analysis, Normalized IR creation, and SQLite persistence in one PoC request. Progress events/worker isolation and retention cleanup remain for the production hardening slice.
 
 ## Deployment Strategy
 
