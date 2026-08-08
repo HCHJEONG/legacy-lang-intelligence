@@ -78,7 +78,7 @@ To enable the optional verified-context Gemini explanation layer, configure the 
 GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json
 GOOGLE_CLOUD_PROJECT=your-project-id
 GOOGLE_CLOUD_LOCATION=global
-VERTEX_AI_MODEL_ID=gemini-2.0-flash
+VERTEX_AI_MODEL_ID=gemini-3.6-flash
 ```
 
 Without a key, Ask AI returns a deterministic summary from the SQLite graph and source evidence.

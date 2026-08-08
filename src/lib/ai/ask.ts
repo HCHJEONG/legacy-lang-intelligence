@@ -39,7 +39,7 @@ function extractEntityQuery(question: string) {
 }
 
 async function askGemini(context: Record<string, unknown>) {
-  const model = process.env.VERTEX_AI_MODEL_ID ?? process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+  const model = process.env.VERTEX_AI_MODEL_ID ?? "gemini-3.6-flash";
   const project = process.env.GOOGLE_CLOUD_PROJECT;
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? "global";
   if (!project) return null;
