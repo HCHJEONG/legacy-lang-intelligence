@@ -112,7 +112,7 @@ The current PoC fetches a public GitHub repository, pins the HEAD commit, create
 
 For the first AWS private-instance deployment, prefer `t3a.medium` if `t3a.small` is already hosting two containers. The application can share the medium during PoC with ingestion concurrency limited to one; move ingestion to a separate worker host when sustained analysis or memory pressure appears in CloudWatch.
 
-The initial nginx integration expects the container name and network alias `cobolai` on `lawvot_net`, with the public host `cobolai.penvot.com`. The existing lawvot frontend host should be exposed as `physicalai.penvot.com`.
+The AWS deployment should not depend on the existing lawvot nginx repository. The intended production shape is a dedicated `cobolai` container registered behind an AWS load-balancer target group and exposed at `cobolai.penvot.com`.
 
 ## Product UX Principle
 

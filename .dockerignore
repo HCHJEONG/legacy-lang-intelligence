@@ -1,7 +1,0 @@
-node_modules
-.git
-.cache
-*.log
-src
-scripts
-docs
