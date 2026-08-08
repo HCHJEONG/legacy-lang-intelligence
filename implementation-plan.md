@@ -538,6 +538,13 @@ Next operational work:
 - record source URL, commit SHA, manifest, errors, and timestamps independently from the analysis run;
 - test public, invalid, oversized, timeout, failed clone, and no-analyzable-file cases.
 
+Operational progress:
+
+- `ingestion_runs` persists phase, status, progress, source URL, commit SHA, manifest, timestamps, and error text.
+- `POST /api/ingest` updates the run through fetch, analyze, and persist phases.
+- `GET /api/ingest/status?runId=...` exposes the current status for a future progress UI.
+- A `t3a.medium` is the recommended initial host when the existing `t3a.small` already runs two containers: both have 2 vCPUs, but medium provides 4 GiB versus small's 2 GiB. Keep ingestion concurrency at one until CloudWatch memory/CPU/credit metrics justify a larger or separate worker host.
+
 Localization result:
 
 - `/en` is the default English route and `/ko` is the Korean route.

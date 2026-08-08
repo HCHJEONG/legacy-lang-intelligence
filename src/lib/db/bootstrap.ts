@@ -124,5 +124,20 @@ export function bootstrapAnalysisDatabase(sqlite: Database.Database) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS ai_explanations_subject_idx ON ai_explanations(subject_entity_id);
+
+    CREATE TABLE IF NOT EXISTS ingestion_runs (
+      id TEXT PRIMARY KEY,
+      source_url TEXT NOT NULL,
+      access_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      phase TEXT NOT NULL,
+      progress INTEGER NOT NULL DEFAULT 0,
+      commit_sha TEXT,
+      manifest_json TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ingestion_runs_status_idx ON ingestion_runs(status, updated_at);
   `);
 }

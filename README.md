@@ -110,6 +110,8 @@ English is the default at `/en`. Korean is available at `/ko`; switching languag
 
 The current PoC fetches a public GitHub repository, pins the HEAD commit, creates an isolated shallow clone, runs the existing analysis pipeline, and persists the result. Production hardening will add asynchronous worker state, progress polling, cancellation, concurrency limits, and retention cleanup.
 
+For the first AWS private-instance deployment, prefer `t3a.medium` if `t3a.small` is already hosting two containers. The application can share the medium during PoC with ingestion concurrency limited to one; move ingestion to a separate worker host when sustained analysis or memory pressure appears in CloudWatch.
+
 ## Product UX Principle
 
 The System Map must be search-first, not full-graph-first.
