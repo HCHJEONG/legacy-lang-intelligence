@@ -116,6 +116,8 @@ The AWS deployment does not depend on the existing lawvot nginx repository or EC
 
 Runtime environment values follow the LawVot pattern: keep secrets in the local `.env.local` file, which is Git-ignored, and include it in the Docker image at `/app/.env.local`. The remote host receives only the image tar under the dedicated application directory; no root-level files or separate runtime config files are overwritten.
 
+Before building, `.fordeploy/deploy-aws.sh` restores `.env.local` from `LEGACY_LANG_ENV_FILE_SOURCE` when the repository root does not have one. The default source is `/mnt/j/VSCodeProjects/legacy-lang-intelligence/.fordeploy/aws-backup/.env.local`; the temporary root copy is removed after deployment, or the original root file is restored.
+
 ## Product UX Principle
 
 The System Map must be search-first, not full-graph-first.

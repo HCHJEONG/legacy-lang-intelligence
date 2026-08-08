@@ -11,9 +11,29 @@ set -euo pipefail
 : "${SSH_PROXY_JUMP:=}"
 : "${MEDIUM_INSTANCE_ID:=i-0c66613ecf80dc3cb}"
 : "${CONFIGURE_ALB:=1}"
+: "${LEGACY_LANG_ENV_FILE_SOURCE:=/mnt/j/VSCodeProjects/legacy-lang-intelligence/.fordeploy/aws-backup/.env.local}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+ENV_LOCAL_BACKUP=""
+restore_env_local() {
+  if [ -n "$ENV_LOCAL_BACKUP" ]; then
+    mv -f "$ENV_LOCAL_BACKUP" "$ROOT_DIR/.env.local"
+  else
+    rm -f "$ROOT_DIR/.env.local"
+  fi
+}
+if [ ! -f "$ROOT_DIR/.env.local" ]; then
+  if [ ! -f "$LEGACY_LANG_ENV_FILE_SOURCE" ]; then
+    echo "missing deployment env file: $LEGACY_LANG_ENV_FILE_SOURCE" >&2
+    exit 1
+  fi
+  cp "$LEGACY_LANG_ENV_FILE_SOURCE" "$ROOT_DIR/.env.local"
+else
+  ENV_LOCAL_BACKUP="$ROOT_DIR/.env.local.bak.$(date +%Y%m%d%H%M%S)"
+  cp "$ROOT_DIR/.env.local" "$ENV_LOCAL_BACKUP"
+fi
 
 if [ ! -f "$ROOT_DIR/analysis-output/carddemo.sqlite" ]; then
   echo "analysis-output/carddemo.sqlite is required. Run the analysis/persistence steps before deploying."
@@ -36,7 +56,10 @@ IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 IMAGE_FILE="$ROOT_DIR/${IMAGE_NAME}-${IMAGE_TAG}.tar"
 IMAGE_BASENAME="$(basename "$IMAGE_FILE")"
 
-cleanup() { rm -f "$IMAGE_FILE"; }
+cleanup() {
+  rm -f "$IMAGE_FILE"
+  restore_env_local
+}
 trap cleanup EXIT
 
 SSH_IDENTITY_OPTS=()
