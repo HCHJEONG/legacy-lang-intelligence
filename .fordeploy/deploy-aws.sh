@@ -49,8 +49,16 @@ else
 fi
 
 if [ ! -f "$ROOT_DIR/analysis-output/carddemo.sqlite" ]; then
-  echo "analysis-output/carddemo.sqlite is required. Run the analysis/persistence steps before deploying."
-  exit 1
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm is required to generate analysis-output/carddemo.sqlite" >&2
+    exit 1
+  fi
+  echo "analysis-output/carddemo.sqlite is missing; generating the analysis artifact..."
+  (
+    cd "$ROOT_DIR"
+    npm run ingest
+    npm run persist
+  )
 fi
 if [ ! -f "$ROOT_DIR/.env.local" ]; then
   echo ".env.local is required for AWS deployment and is intentionally gitignored."
