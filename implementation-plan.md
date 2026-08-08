@@ -488,7 +488,7 @@ Current result:
 - `src/app/api/ask/route.ts` exposes a bounded server-side Ask AI endpoint.
 - `src/lib/ai/ask.ts` resolves an entity, loads its verified neighborhood and evidence, and builds a constrained context package before any LLM call.
 - `src/components/ask-ai-panel.tsx` provides the Ask AI experience alongside the System Map.
-- `GEMINI_API_KEY` enables Gemini explanation; without it, or when the call fails, the product returns a deterministic verified summary.
+- `GEMINI_API_KEY` enables the current direct Gemini explanation path; model selection follows LawVot-compatible `VERTEX_AI_MODEL_ID`, then `LAWVOT_CI_MODEL_ID`, then legacy `GEMINI_MODEL`. Without an API key, or when the call fails, the product returns a deterministic verified summary.
 - Responses disclose whether they came from Gemini or the deterministic fallback and include source evidence locations.
 - The LLM prompt explicitly forbids inventing entities, relations, source lines, or behavior.
 

@@ -38,7 +38,8 @@ function extractEntityQuery(question: string) {
 }
 
 async function askGemini(context: Record<string, unknown>) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL ?? "gemini-2.0-flash"}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+  const model = process.env.VERTEX_AI_MODEL_ID ?? process.env.LAWVOT_CI_MODEL_ID ?? process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({

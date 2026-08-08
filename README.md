@@ -76,7 +76,7 @@ To enable the optional verified-context Gemini explanation layer, configure the 
 
 ```bash
 GEMINI_API_KEY=your-key
-GEMINI_MODEL=gemini-2.0-flash
+VERTEX_AI_MODEL_ID=gemini-2.0-flash
 ```
 
 Without a key, Ask AI returns a deterministic summary from the SQLite graph and source evidence.
