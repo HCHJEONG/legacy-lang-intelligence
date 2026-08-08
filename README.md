@@ -88,6 +88,16 @@ The current implementation covers steps 1 through 9 of the plan:
 
 The next product-facing phase is querying persisted entities and relations for the System Map and Ask AI layers.
 
+## Product UX Principle
+
+The System Map must be search-first, not full-graph-first.
+
+Use this flow:
+
+`Search -> Entity -> Neighborhood -> Follow relation -> Source`
+
+The app should show Analysis Quality before or alongside graph exploration so users can see what the analyzer verified and what remains unresolved.
+
 ## Source Attribution
 
 The analyzed target is the AWS sample repository:

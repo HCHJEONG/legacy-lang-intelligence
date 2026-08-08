@@ -361,11 +361,54 @@ Current result:
 - `source_files` are currently inferred from entity, evidence, and finding source paths. Later GitHub URL ingestion should persist full discovered file inventory, including unknown files with no extracted entities.
 - The physical table is named `relations` to match the Normalized IR. It fills the dependency role described in this step.
 
-### 11. Build System Map And Source Viewer
+### 11. Build SQLite Query Layer
 
-Status: pending.
+Status: in progress.
+
+Build deterministic query functions over the persisted SQLite model before adding AI or broad visualization.
+
+Initial query functions:
+
+- `getLatestAnalysisRun`
+- `getAnalysisQuality`
+- `searchEntities`
+- `getEntity`
+- `getNeighborhood`
+- `getRelationEvidence`
+- `getSource`
+
+The query layer is the product boundary between persistence and UI. System Map and Ask AI should both use these deterministic queries instead of reading raw database tables directly.
+
+### 12. Build Analysis Quality Dashboard
+
+Status: in progress.
+
+Expose analysis confidence and known gaps to the user, not only to internal benchmarks.
+
+The dashboard should show:
+
+- files analyzed and files discovered;
+- entity, relation, and evidence coverage;
+- unresolved copybook, call, CICS target, runtime call, dataset, and unsupported construct counts;
+- confidence distribution;
+- analyzer agreement and disagreement when multiple analyzers exist;
+- analyzer version and run timestamp.
+
+The product voice should be:
+
+`We verified this much. These areas remain unresolved or partial.`
+
+This is a trust feature. The UI should avoid implying perfect comprehension of an enterprise legacy system.
+
+### 13. Build Search-First System Map And Source Viewer
+
+Status: in progress.
 
 Use `@xyflow/react` for the System Map.
+
+Do not render the full graph at startup. A CardDemo run already has thousands of relations, and the enterprise case will be larger. The intended user journey is:
+
+`Search -> Entity -> Neighborhood -> Follow relation -> Source`
 
 Initial graph features:
 
@@ -376,6 +419,9 @@ Initial graph features:
 - selected-node inspector
 - 1-hop, 2-hop, and 3-hop neighborhood loading
 - upstream/downstream highlighting
+- node and edge limits for readability
+- unresolved targets styled differently
+- confidence/status filters
 
 Build a lightweight read-only Source Viewer:
 
@@ -384,7 +430,13 @@ Build a lightweight read-only Source Viewer:
 - highlight selected lines;
 - link graph nodes and evidence references to source locations.
 
-### 12. Build Ask AI With Verified Visual Answers
+Current result:
+
+- The first UI pass reads SQLite directly through `src/lib/db/analysis-queries.ts`.
+- The home screen now includes Analysis Quality, entity search, 1-hop/2-hop/3-hop neighborhood controls, an XYFlow System Map, and relation evidence snippets.
+- The graph intentionally defaults to a search result and bounded neighborhood instead of rendering all relations.
+
+### 14. Build Ask AI With Verified Visual Answers
 
 Status: pending.
 
@@ -416,7 +468,7 @@ Answer flow:
 
 The LLM must not generate factual graph edges. It may only explain verified graph data.
 
-### 13. Add GitHub URL Based Ingestion UX
+### 15. Add GitHub URL Based Ingestion UX
 
 Status: pending.
 
