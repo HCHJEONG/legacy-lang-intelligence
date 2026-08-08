@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${REMOTE_HOST:=t3a}"
-: "${REMOTE_USER:=hchjeong}"
+: "${BASTION_HOST:=ubuntu@43.202.136.180}"
+: "${PRIVATE_HOST:=ubuntu@172.31.68.164}"
+: "${BASTION_SSH_KEY:=${HOME}/.ssh/penvotkeypair1.pem}"
+: "${REMOTE_USER:=ubuntu}"
 : "${REMOTE_PORT:=22}"
-: "${REMOTE_BASE_DIR:=/home/${REMOTE_USER}/docker_images/legacy-lang-intelligence}"
+: "${REMOTE_BASE_DIR:=/home/ubuntu/docker_images/legacy-lang-intelligence}"
 : "${CONTAINER_NAME:=cobolai}"
 : "${CONTAINER_PORT:=3000}"
 : "${HOST_PORT:=3300}"
-: "${SSH_PROXY_JUMP:=}"
 : "${MEDIUM_INSTANCE_ID:=i-0c66613ecf80dc3cb}"
 : "${CONFIGURE_ALB:=1}"
 : "${LEGACY_LANG_ENV_FILE_SOURCE:=/mnt/j/VSCodeProjects/legacy-lang-intelligence/.fordeploy/aws-backup/.env.local}"
@@ -89,31 +90,54 @@ cleanup() {
 }
 trap cleanup EXIT
 
-SSH_IDENTITY_OPTS=()
-if [ -n "${SSH_KEY_PATH:-}" ] && [ -f "$SSH_KEY_PATH" ]; then
-  SSH_IDENTITY_OPTS=(-i "$SSH_KEY_PATH" -o IdentitiesOnly=yes)
-elif [ -f "${HOME}/.ssh/id_ed25519" ]; then
-  SSH_IDENTITY_OPTS=(-i "${HOME}/.ssh/id_ed25519" -o IdentitiesOnly=yes)
-elif [ -f "${HOME}/.ssh/id_rsa" ]; then
-  SSH_IDENTITY_OPTS=(-i "${HOME}/.ssh/id_rsa" -o IdentitiesOnly=yes)
+if [ ! -f "$BASTION_SSH_KEY" ]; then
+  echo "missing Bastion SSH key: $BASTION_SSH_KEY" >&2
+  exit 1
 fi
-
-SSH_OPTS=(-o StrictHostKeyChecking=accept-new -p "$REMOTE_PORT")
-SCP_OPTS=(-o StrictHostKeyChecking=accept-new -P "$REMOTE_PORT")
-if [ -n "$SSH_PROXY_JUMP" ]; then
-  SSH_OPTS+=(-o "ProxyJump=$SSH_PROXY_JUMP")
-  SCP_OPTS+=(-o "ProxyJump=$SSH_PROXY_JUMP")
-fi
-REMOTE_SERVER="$REMOTE_USER@$REMOTE_HOST"
+SSH_OPTS=(-i "$BASTION_SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -p "$REMOTE_PORT")
+SCP_OPTS=(-i "$BASTION_SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -P "$REMOTE_PORT")
+BASTION_TAR="/home/ubuntu/$IMAGE_BASENAME"
+PRIVATE_TAR="/home/ubuntu/$IMAGE_BASENAME"
 
 docker build -f "$ROOT_DIR/Dockerfile.aws" -t "$IMAGE" "$ROOT_DIR"
 docker save "$IMAGE" > "$IMAGE_FILE"
 docker rmi "$IMAGE" >/dev/null 2>&1 || true
 
-ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "mkdir -p '$REMOTE_BASE_DIR/images'"
-scp "${SCP_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$IMAGE_FILE" "$REMOTE_SERVER:$REMOTE_BASE_DIR/images/"
-ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "set -eu; docker load -i '$REMOTE_BASE_DIR/images/$IMAGE_BASENAME'; rm -f '$REMOTE_BASE_DIR/images/$IMAGE_BASENAME'; docker rm -f '$CONTAINER_NAME' >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name '$CONTAINER_NAME' -p 0.0.0.0:${HOST_PORT}:${CONTAINER_PORT} '$IMAGE'"
-ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "docker ps --filter name=^/$CONTAINER_NAME$ --filter status=running"
+echo "sending image to Bastion..."
+scp "${SCP_OPTS[@]}" "$IMAGE_FILE" "$BASTION_HOST:$BASTION_TAR"
+ssh "${SSH_OPTS[@]}" "$BASTION_HOST" \
+  PRIVATE_HOST="$PRIVATE_HOST" \
+  BASTION_TAR="$BASTION_TAR" \
+  PRIVATE_TAR="$PRIVATE_TAR" \
+  REMOTE_BASE_DIR="$REMOTE_BASE_DIR" \
+  IMAGE="$IMAGE" \
+  CONTAINER_NAME="$CONTAINER_NAME" \
+  HOST_PORT="$HOST_PORT" \
+  CONTAINER_PORT="$CONTAINER_PORT" \
+  bash -s <<'BASTION_SCRIPT'
+set -euo pipefail
+scp -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$BASTION_TAR" "$PRIVATE_HOST:$PRIVATE_TAR"
+ssh -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$PRIVATE_HOST" \
+  BASTION_TAR="$BASTION_TAR" \
+  PRIVATE_TAR="$PRIVATE_TAR" \
+  REMOTE_BASE_DIR="$REMOTE_BASE_DIR" \
+  IMAGE="$IMAGE" \
+  CONTAINER_NAME="$CONTAINER_NAME" \
+  HOST_PORT="$HOST_PORT" \
+  CONTAINER_PORT="$CONTAINER_PORT" \
+  bash -s <<'PRIVATE_SCRIPT'
+set -euo pipefail
+mkdir -p "$REMOTE_BASE_DIR/images"
+mv "$PRIVATE_TAR" "$REMOTE_BASE_DIR/images/"
+docker load -i "$REMOTE_BASE_DIR/images/$(basename "$PRIVATE_TAR")"
+rm -f "$REMOTE_BASE_DIR/images/$(basename "$PRIVATE_TAR")"
+docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+docker run -d --restart unless-stopped --name "$CONTAINER_NAME" \
+  -p "0.0.0.0:${HOST_PORT}:${CONTAINER_PORT}" "$IMAGE"
+docker ps --filter "name=^/$CONTAINER_NAME$" --filter status=running
+PRIVATE_SCRIPT
+rm -f "$BASTION_TAR"
+BASTION_SCRIPT
 
 if [ "$CONFIGURE_ALB" = "1" ]; then
   MEDIUM_INSTANCE_ID="$MEDIUM_INSTANCE_ID" bash "$SCRIPT_DIR/configure-aws-alb.sh"
