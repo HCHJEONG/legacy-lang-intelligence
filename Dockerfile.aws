@@ -8,5 +8,6 @@ COPY .next ./.next
 COPY public ./public
 COPY analysis-output ./analysis-output
 COPY next.config.ts tsconfig.json next-env.d.ts ./
+COPY .env.local ./.env.local
 EXPOSE 3000
 CMD ["npm", "run", "start"]

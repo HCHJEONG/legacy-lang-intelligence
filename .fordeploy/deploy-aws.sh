@@ -11,7 +11,6 @@ set -euo pipefail
 : "${SSH_PROXY_JUMP:=}"
 : "${MEDIUM_INSTANCE_ID:=i-0c66613ecf80dc3cb}"
 : "${CONFIGURE_ALB:=1}"
-: "${ENV_FILE:=.env.local}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
@@ -20,11 +19,22 @@ if [ ! -f "$ROOT_DIR/analysis-output/carddemo.sqlite" ]; then
   echo "analysis-output/carddemo.sqlite is required. Run the analysis/persistence steps before deploying."
   exit 1
 fi
+if [ ! -f "$ROOT_DIR/.env.local" ]; then
+  echo ".env.local is required for AWS deployment and is intentionally gitignored."
+  exit 1
+fi
+case "$REMOTE_BASE_DIR" in
+  ""|/|/home|/home/"$REMOTE_USER")
+    echo "REMOTE_BASE_DIR must be a dedicated application directory" >&2
+    exit 1
+    ;;
+esac
 
 IMAGE_NAME="legacy-lang-intelligence"
 IMAGE_TAG="$(date +%Y%m%d%H%M%S)"
 IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 IMAGE_FILE="$ROOT_DIR/${IMAGE_NAME}-${IMAGE_TAG}.tar"
+IMAGE_BASENAME="$(basename "$IMAGE_FILE")"
 
 cleanup() { rm -f "$IMAGE_FILE"; }
 trap cleanup EXIT
@@ -45,26 +55,14 @@ if [ -n "$SSH_PROXY_JUMP" ]; then
   SCP_OPTS+=(-o "ProxyJump=$SSH_PROXY_JUMP")
 fi
 REMOTE_SERVER="$REMOTE_USER@$REMOTE_HOST"
-REMOTE_ENV_FILE="$REMOTE_BASE_DIR/config/.env.local"
-ENV_ARGS=()
-if [ -f "$ROOT_DIR/$ENV_FILE" ]; then
-  ENV_ARGS=(--env-file "$REMOTE_ENV_FILE")
-fi
 
 docker build -f "$ROOT_DIR/Dockerfile.aws" -t "$IMAGE" "$ROOT_DIR"
 docker save "$IMAGE" > "$IMAGE_FILE"
 docker rmi "$IMAGE" >/dev/null 2>&1 || true
 
-ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "mkdir -p '$REMOTE_BASE_DIR/images' '$REMOTE_BASE_DIR/config'"
+ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "mkdir -p '$REMOTE_BASE_DIR/images'"
 scp "${SCP_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$IMAGE_FILE" "$REMOTE_SERVER:$REMOTE_BASE_DIR/images/"
-if [ -f "$ROOT_DIR/$ENV_FILE" ]; then
-  scp "${SCP_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$ROOT_DIR/$ENV_FILE" "$REMOTE_SERVER:$REMOTE_ENV_FILE"
-fi
-ENV_ARGS_TEXT=""
-if [ "${#ENV_ARGS[@]}" -gt 0 ]; then
-  ENV_ARGS_TEXT="--env-file '$REMOTE_ENV_FILE'"
-fi
-ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "set -eu; docker load -i '$REMOTE_BASE_DIR/images/$IMAGE_FILE'; rm -f '$REMOTE_BASE_DIR/images/$IMAGE_FILE'; docker rm -f '$CONTAINER_NAME' >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name '$CONTAINER_NAME' $ENV_ARGS_TEXT -p 0.0.0.0:${HOST_PORT}:${CONTAINER_PORT} '$IMAGE'"
+ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "set -eu; docker load -i '$REMOTE_BASE_DIR/images/$IMAGE_BASENAME'; rm -f '$REMOTE_BASE_DIR/images/$IMAGE_BASENAME'; docker rm -f '$CONTAINER_NAME' >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name '$CONTAINER_NAME' -p 0.0.0.0:${HOST_PORT}:${CONTAINER_PORT} '$IMAGE'"
 ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "docker ps --filter name=^/$CONTAINER_NAME$ --filter status=running"
 
 if [ "$CONFIGURE_ALB" = "1" ]; then
