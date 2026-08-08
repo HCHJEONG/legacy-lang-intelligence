@@ -75,7 +75,9 @@ By default this writes:
 To enable the optional verified-context Gemini explanation layer, configure the key on the server only:
 
 ```bash
-GEMINI_API_KEY=your-key
+GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json
+GOOGLE_CLOUD_PROJECT=your-project-id
+GOOGLE_CLOUD_LOCATION=global
 VERTEX_AI_MODEL_ID=gemini-2.0-flash
 ```
 

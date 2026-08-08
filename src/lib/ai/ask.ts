@@ -1,4 +1,5 @@
 import { getSystemMapViewModel } from "@/lib/db/analysis-queries";
+import { GoogleAuth } from "google-auth-library";
 
 export type AskResult = {
   answer: string;
@@ -22,7 +23,7 @@ export async function answerQuestion(question: string): Promise<AskResult> {
   const evidence = (view.graph?.evidence ?? []).map(({ filePath, startLine, endLine, snippet }) => ({ filePath, startLine, endLine, snippet }));
   const context = { question, entity, relations, evidence, quality: view.quality };
 
-  if (process.env.GEMINI_API_KEY) {
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_CLOUD_PROJECT) {
     const answer = await askGemini(context);
     if (answer) {
       return { answer, mode: "gemini-verified", entity, relations, evidence };
@@ -39,9 +40,22 @@ function extractEntityQuery(question: string) {
 
 async function askGemini(context: Record<string, unknown>) {
   const model = process.env.VERTEX_AI_MODEL_ID ?? process.env.LAWVOT_CI_MODEL_ID ?? process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+  const project = process.env.GOOGLE_CLOUD_PROJECT;
+  const location = process.env.GOOGLE_CLOUD_LOCATION ?? "global";
+  if (!project) return null;
+
+  const auth = new GoogleAuth({
+    keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+  });
+  const client = await auth.getClient();
+  const token = await client.getAccessToken();
+  if (!token.token) return null;
+
+  const host = location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+  const response = await fetch(`https://${host}/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", authorization: `Bearer ${token.token}` },
     body: JSON.stringify({
       contents: [{ parts: [{ text: `You explain legacy code. Use only the VERIFIED_CONTEXT below. Never invent entities, relations, source lines, or behavior. If evidence is missing, say it is unresolved. Keep the answer concise and mention evidence locations. VERIFIED_CONTEXT:\n${JSON.stringify(context)}` }] }],
     }),
