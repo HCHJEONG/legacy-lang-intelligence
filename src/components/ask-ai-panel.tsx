@@ -12,7 +12,7 @@ type AskResponse = {
   evidence: Array<{ filePath: string; startLine: number; endLine: number }>;
 };
 
-export function AskAiPanel() {
+export function AskAiPanel({ projectId }: { projectId?: string }) {
   const [question, setQuestion] = useState("What does CBTRN02C call?");
   const [result, setResult] = useState<AskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export function AskAiPanel() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/ask", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question }) });
+      const response = await fetch("/api/ask", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question, projectId }) });
       const payload = (await response.json()) as AskResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Ask AI failed");
       setResult(payload);

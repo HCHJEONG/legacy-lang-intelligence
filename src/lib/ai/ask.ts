@@ -9,9 +9,9 @@ export type AskResult = {
   evidence: Array<{ filePath: string; startLine: number; endLine: number; snippet: string }>;
 };
 
-export async function answerQuestion(question: string): Promise<AskResult> {
+export async function answerQuestion(question: string, projectId?: string): Promise<AskResult> {
   const query = extractEntityQuery(question);
-  const view = getSystemMapViewModel({ query, hopLimit: 1 });
+  const view = getSystemMapViewModel({ query, projectId, hopLimit: 1 });
   const entity = view.graph?.selectedEntity ?? null;
   const nodeNames = new Map(view.graph?.nodes.map((node) => [node.id, node.label]) ?? []);
   const relations = (view.graph?.edges ?? []).map((edge) => ({

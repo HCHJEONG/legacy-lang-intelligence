@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "tsx --test tests/**/*.test.ts",
     "ingest": "tsx scripts/ingest-carddemo.ts",
     "coverage": "tsx scripts/report-carddemo-coverage.ts",
     "persist": "tsx scripts/persist-carddemo-analysis.ts"

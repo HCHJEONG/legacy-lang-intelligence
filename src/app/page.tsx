@@ -24,6 +24,7 @@ type HomeProps = {
   relationType?: string;
     confidence?: "all" | "high" | "medium" | "low";
     locale?: string;
+    project?: string;
   }>;
 };
 
@@ -35,7 +36,8 @@ export default async function Home({ searchParams }: HomeProps) {
   const entityId = params?.entity;
   const hopLimit = parseHopLimit(params?.hops);
   const filters = { entityType: params?.entityType, relationType: params?.relationType, confidence: params?.confidence ?? "all" } as const;
-  const viewModel = getSystemMapViewModel({ query, entityId, hopLimit, filters });
+  const viewModel = getSystemMapViewModel({ query, entityId, projectId: params?.project, hopLimit, filters });
+  const projectId = viewModel.selectedProject?.id;
 
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
@@ -63,20 +65,40 @@ export default async function Home({ searchParams }: HomeProps) {
         ) : (
           <div className="grid flex-1 gap-5 py-5 xl:grid-cols-[360px_1fr]">
             <aside className="space-y-5">
+              <ProjectSelector projects={viewModel.projects} selectedProjectId={projectId} />
               {viewModel.quality ? <AnalysisQuality quality={viewModel.quality} copy={copy} /> : null}
-              <EntitySearch query={query} results={viewModel.searchResults} selectedId={viewModel.graph?.selectedEntity?.id} filters={filters} copy={copy} />
+              <EntitySearch query={query} results={viewModel.searchResults} selectedId={viewModel.graph?.selectedEntity?.id} projectId={projectId} filters={filters} copy={copy} />
             </aside>
 
             <section className="space-y-5">
               <RepositoryIngestionPanel />
-              <SystemMapPanel graph={viewModel.graph} query={query} hopLimit={hopLimit} filters={filters} copy={copy} />
-              <AskAiPanel />
+              <SystemMapPanel graph={viewModel.graph} query={query} projectId={projectId} hopLimit={hopLimit} filters={filters} copy={copy} />
+              <AskAiPanel projectId={projectId} />
               <EvidencePanel graph={viewModel.graph} copy={copy} />
             </section>
           </div>
         )}
       </div>
     </main>
+  );
+}
+
+function ProjectSelector({
+  projects,
+  selectedProjectId,
+}: {
+  projects: ReturnType<typeof getSystemMapViewModel>["projects"];
+  selectedProjectId?: string;
+}) {
+  if (projects.length < 2) return null;
+  return (
+    <form className="rounded-md border border-zinc-200 bg-white p-4">
+      <label htmlFor="project" className="mb-2 block text-xs font-semibold uppercase text-zinc-500">Analysis project</label>
+      <select id="project" name="project" defaultValue={selectedProjectId} className="h-9 w-full rounded-md border border-zinc-300 bg-white px-2.5 text-sm">
+        {projects.map((project) => <option key={project.id} value={project.id}>{project.name} ({project.entityCount.toLocaleString()})</option>)}
+      </select>
+      <Button type="submit" size="sm" variant="outline" className="mt-2 w-full">Open project</Button>
+    </form>
   );
 }
 
@@ -154,12 +176,14 @@ function EntitySearch({
   query,
   results,
   selectedId,
+  projectId,
   filters,
   copy,
 }: {
   query: string;
   results: ReturnType<typeof getSystemMapViewModel>["searchResults"];
   selectedId?: string;
+  projectId?: string;
   filters: { entityType?: string; relationType?: string; confidence?: string };
   copy: Messages;
 }) {
@@ -170,6 +194,7 @@ function EntitySearch({
         <h2 className="text-sm font-semibold">{copy.search}</h2>
       </div>
       <form className="mb-3 flex gap-2">
+        {projectId ? <input type="hidden" name="project" value={projectId} /> : null}
         <input
           name="q"
           defaultValue={query}
@@ -194,7 +219,7 @@ function EntitySearch({
         {results.map((entity) => (
           <a
             key={entity.id}
-            href={`/?q=${encodeURIComponent(query)}&entity=${encodeURIComponent(entity.id)}`}
+            href={`/?${projectId ? `project=${encodeURIComponent(projectId)}&` : ""}q=${encodeURIComponent(query)}&entity=${encodeURIComponent(entity.id)}`}
             className={[
               "block rounded-md border px-3 py-2 text-sm transition-colors hover:bg-zinc-50",
               entity.id === selectedId ? "border-zinc-950 bg-zinc-50" : "border-zinc-200 bg-white",
@@ -218,12 +243,14 @@ function EntitySearch({
 function SystemMapPanel({
   graph,
   query,
+  projectId,
   hopLimit,
   filters,
   copy,
 }: {
   graph: ReturnType<typeof getSystemMapViewModel>["graph"];
   query: string;
+  projectId?: string;
   hopLimit: 1 | 2 | 3;
   filters: { entityType?: string; relationType?: string; confidence?: string };
   copy: Messages;
@@ -242,7 +269,7 @@ function SystemMapPanel({
           {[1, 2, 3].map((hop) => (
             <a
               key={hop}
-              href={`/?q=${encodeURIComponent(query)}${graph?.selectedEntity ? `&entity=${encodeURIComponent(graph.selectedEntity.id)}` : ""}&hops=${hop}`}
+              href={`/?${projectId ? `project=${encodeURIComponent(projectId)}&` : ""}q=${encodeURIComponent(query)}${graph?.selectedEntity ? `&entity=${encodeURIComponent(graph.selectedEntity.id)}` : ""}&hops=${hop}`}
               className={[
                 "inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium",
                 hopLimit === hop ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-200 bg-white text-zinc-600",
@@ -253,6 +280,7 @@ function SystemMapPanel({
           ))}
           <form className="flex gap-1" method="get">
             <input type="hidden" name="q" value={query} />
+            {projectId ? <input type="hidden" name="project" value={projectId} /> : null}
             {graph?.selectedEntity ? <input type="hidden" name="entity" value={graph.selectedEntity.id} /> : null}
             <input type="hidden" name="hops" value={hopLimit} />
             <select name="relationType" defaultValue={filters.relationType ?? "all"} className="h-7 rounded-md border border-zinc-200 bg-white px-2 text-xs">
@@ -278,7 +306,7 @@ function SystemMapPanel({
             <div className="flex flex-wrap gap-2">
               {graph.edges.slice(0, 12).map((edge) => {
                 const target = graph.nodes.find((node) => node.id === edge.target);
-                return target && !target.id.startsWith("unresolved:") ? <a key={edge.id} href={`/?q=${encodeURIComponent(target.label)}&entity=${encodeURIComponent(target.id)}&hops=${hopLimit}`} className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50">{edge.label} → {target.label}</a> : null;
+                return target && !target.id.startsWith("unresolved:") ? <a key={edge.id} href={`/?${projectId ? `project=${encodeURIComponent(projectId)}&` : ""}q=${encodeURIComponent(target.label)}&entity=${encodeURIComponent(target.id)}&hops=${hopLimit}`} className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50">{edge.label} → {target.label}</a> : null;
               })}
             </div>
           </div>
@@ -324,7 +352,7 @@ function EvidencePanel({ graph, copy }: { graph: ReturnType<typeof getSystemMapV
 function LanguageSwitch({ locale, params }: { locale: Locale; params?: Awaited<HomeProps["searchParams"]> }) {
   const target = locale === "en" ? "ko" : "en";
   const query = new URLSearchParams();
-  for (const key of ["q", "entity", "hops", "entityType", "relationType", "confidence"]) {
+  for (const key of ["q", "entity", "hops", "entityType", "relationType", "confidence", "project"]) {
     const value = params?.[key as keyof typeof params];
     if (value) query.set(key, value);
   }

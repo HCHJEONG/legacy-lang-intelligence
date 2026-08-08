@@ -103,7 +103,7 @@ The current implementation covers steps 1 through 15 of the plan:
 14. Verified-context Ask AI with Gemini and deterministic fallback
 15. Public GitHub fetch, analysis, persistence, and ingestion status tracking
 
-The next phase is production ingestion hardening and deployment verification.
+The next phase is production ingestion hardening and deployment verification. Analysis runs are project-scoped; CardDemo remains the default project and a failed or entity-empty GitHub analysis does not replace its visible result.
 
 ## Language Support
 
@@ -115,7 +115,7 @@ The current PoC fetches a public GitHub repository, pins the HEAD commit, create
 
 For the first AWS private-instance deployment, prefer `t3a.medium` if `t3a.small` is already hosting two containers. The application can share the medium during PoC with ingestion concurrency limited to one; move ingestion to a separate worker host when sustained analysis or memory pressure appears in CloudWatch.
 
-The AWS deployment does not depend on the existing lawvot nginx repository or ECR. Run `.fordeploy/deploy-aws.sh` from the workstation that has the existing `t3a` SSH alias (the LawVot production path is WSL PEM -> Bastion -> `t3a`). The script builds, saves, copies, and loads the Docker image over SSH, then performs the ALB target-group, security-group, and host-rule setup automatically on the first deployment. The container uses host port `3300` and container port `3000` to avoid collisions. Set `REMOTE_HOST` or `SSH_PROXY_JUMP` only when the local SSH alias differs.
+The AWS deployment does not depend on the existing lawvot nginx repository or ECR. Run `.fordeploy/deploy-aws.sh` from WSL; it builds, saves, copies, and loads the Docker image through the Bastion and replaces only the `cobolai` container. The container uses host port `3300` and container port `3000`. ALB and Route 53 are manually configured, so normal redeployments keep `CONFIGURE_ALB=0`.
 
 Runtime environment values follow the LawVot pattern: keep secrets in the local `.env.local` file, which is Git-ignored, and include it in the Docker image at `/app/.env.local`. The remote host receives only the image tar under the dedicated application directory; no root-level files or separate runtime config files are overwritten.
 
@@ -133,9 +133,7 @@ The app should show Analysis Quality before or alongside graph exploration so us
 
 ## Remaining Work
 
-- Verify the ALB HTTPS certificate covers `cobolai.penvot.com` and `physicalai.penvot.com`.
-- Run the first `.fordeploy/deploy-aws.sh` deployment through the existing LawVot `t3a` SSH alias.
-- Confirm ALB target health, `/en` health checks, host routing, and port `3300` isolation.
+- Confirm ALB target health and the `/en` health check after each deployment without changing the existing DNS or host rules.
 - Verify the GCP service account has Vertex AI permissions and Ask AI works with the packaged `/app/gcp-key.json`.
 - Complete asynchronous ingestion workers, progress UI, cancellation, concurrency limits, duplicate commit reuse, and retention cleanup.
 - Add automated integration, security, localization, and production deployment tests.

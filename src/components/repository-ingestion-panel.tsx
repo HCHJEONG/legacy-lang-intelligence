@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, ExternalLink, FolderGit2, LockKeyhole, Send, ShieldAlert } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 type Access = "public" | "private" | "restricted";
 
 export function RepositoryIngestionPanel() {
+  const router = useRouter();
   const [access, setAccess] = useState<Access>("public");
   const [url, setUrl] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -19,9 +21,10 @@ export function RepositoryIngestionPanel() {
     setBusy(true); setMessage(null); setError(null);
     try {
       const response = await fetch("/api/ingest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url, access }) });
-      const result = (await response.json()) as { message?: string; error?: string };
+      const result = (await response.json()) as { message?: string; error?: string; projectId?: string };
       if (!response.ok) throw new Error(result.error ?? "Repository validation failed");
       setMessage(result.message ?? "Request accepted.");
+      if (result.projectId) router.push(`/?project=${encodeURIComponent(result.projectId)}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Repository validation failed");
     } finally { setBusy(false); }

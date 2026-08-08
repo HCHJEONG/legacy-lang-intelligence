@@ -16,9 +16,13 @@ export async function POST(request: Request) {
   try {
     const manifest = await fetchPublicGithubRepository(url);
     updateIngestionRun(runId, "analyzing", "Discovering and analyzing source files", 45, { commitSha: manifest.commitSha, manifest });
-    const result = await analyzeAndPersistSource(manifest.sourceRoot);
+    const projectId = `github:${repository.owner.toLowerCase()}/${repository.name.toLowerCase()}`;
+    const result = await analyzeAndPersistSource(manifest.sourceRoot, {
+      id: projectId,
+      name: `${repository.owner}/${repository.name}`,
+    });
     updateIngestionRun(runId, "completed", "Analysis persisted", 100, { commitSha: manifest.commitSha, manifest });
-    return Response.json({ status: "completed", ingestionRunId: runId, message: "Public repository fetched, analyzed, and persisted.", policy: "The repository is treated as source input only; repository code is never executed.", manifest, analysis: { runId: result.persistence.runId, entities: result.normalized.entities.length, relations: result.normalized.relations.length, unresolved: result.normalized.coverage.unresolvedCount } });
+    return Response.json({ status: "completed", ingestionRunId: runId, projectId, message: "Public repository fetched, analyzed, and persisted.", policy: "The repository is treated as source input only; repository code is never executed.", manifest, analysis: { runId: result.persistence.runId, entities: result.normalized.entities.length, relations: result.normalized.relations.length, unresolved: result.normalized.coverage.unresolvedCount } });
   } catch (error) {
     updateIngestionRun(runId, "failed", "Ingestion failed", 100, { errorMessage: error instanceof Error ? error.message : "Repository fetch failed." });
     return Response.json({ error: error instanceof Error ? error.message : "Repository fetch failed." }, { status: 422 });

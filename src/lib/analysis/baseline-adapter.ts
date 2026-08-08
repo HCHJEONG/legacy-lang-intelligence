@@ -40,7 +40,20 @@ const RELATION_TYPE_MAP: Record<AnalysisDependency["type"], NormalizedRelationTy
   INVOKES_TRANSACTION: "INVOKES",
 };
 
-export function normalizeBaselineAnalysis(analysis: StaticAnalysisResult): NormalizedAnalysisRun {
+export type AnalysisProject = {
+  id: string;
+  name: string;
+};
+
+const CARDDEMO_PROJECT: AnalysisProject = {
+  id: "carddemo",
+  name: "AWS CardDemo",
+};
+
+export function normalizeBaselineAnalysis(
+  analysis: StaticAnalysisResult,
+  project: AnalysisProject = CARDDEMO_PROJECT,
+): NormalizedAnalysisRun {
   const evidence: Evidence[] = [];
   const findings: AnalyzerFinding[] = [];
   const entityIdsByLegacyId = new Map<string, string>();
@@ -60,8 +73,8 @@ export function normalizeBaselineAnalysis(analysis: StaticAnalysisResult): Norma
   const normalized: NormalizedAnalysisRun = {
     schemaVersion: "0.1.0",
     project: {
-      id: "carddemo",
-      name: "AWS CardDemo",
+      id: project.id,
+      name: project.name,
       sourceRoot: analysis.sourceRoot,
     },
     generatedAt: analysis.generatedAt,

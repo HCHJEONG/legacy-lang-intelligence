@@ -525,13 +525,16 @@ Current result:
 - `src/lib/ingestion/github-url.ts` and `src/lib/ingestion/limits.ts` define the accepted URL shape and safety limits.
 - The fetch layer has been smoke-tested against a public GitHub repository and recorded its commit SHA and file manifest.
 - The public ingestion endpoint now completes fetch, analysis, Normalized IR creation, and SQLite persistence in one PoC request. Progress events/worker isolation and retention cleanup remain for the production hardening slice.
+- GitHub analyses now use stable repository-specific project ids (`github:owner/repository`) instead of being stored as CardDemo.
+- The UI selects the latest non-empty analysis run per project, defaults to CardDemo when available, and exposes a project selector when multiple valid projects exist.
+- Analyses with no extracted COBOL, Copybook, or JCL entities fail without replacing the currently visible project result.
 - AWS deployment preparation remains independent of the existing lawvot nginx repository and ECR. `.fordeploy/deploy-aws.sh` uses manual Docker save/scp/load deployment with host port `3300`, and `.fordeploy/configure-aws-alb.sh` connects a dedicated `cobolai` target group to `cobolai.penvot.com`.
 
 AWS deployment decisions:
 
 - The LawVot production path is the reference: WSL PEM -> Bastion -> the existing `t3a` SSH alias -> the private instance. This repository does not use the LawVot nginx repository.
 - The first `.fordeploy/deploy-aws.sh` run builds the image locally, saves it as a tar archive, transfers it into `/home/hchjeong/docker_images/legacy-lang-intelligence/images`, loads it, and replaces only the `cobolai` container. ECR is intentionally not used.
-- The deployment script invokes `.fordeploy/configure-aws-alb.sh` automatically. That script creates or updates the dedicated target group, registers the `t3a.medium` instance on host port `3300`, allows only the ALB security group to reach port `3300`, creates the `cobolai.penvot.com` and `physicalai.penvot.com` host rules, and removes the retired `ai.sampoongapt.com` rule.
+- ALB and Route 53 are manually configured. Deployments default to `CONFIGURE_ALB=0`; `.fordeploy/configure-aws-alb.sh` is retained for explicit administrative use only.
 - Runtime credentials follow the LawVot AWS image pattern. `.env.local` and `gcp-key.json` are Git-ignored, are restored from `.fordeploy/aws-backup` or configured absolute source paths before `docker build`, and are copied into the image as `/app/.env.local` and `/app/gcp-key.json`. Temporary root copies are restored or removed after the build.
 - Vertex AI uses `GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, and `VERTEX_AI_MODEL_ID`. No `GEMINI_API_KEY`, `GEMINI_MODEL`, or LawVot-specific model variable is required. The code fallback is `gemini-3.6-flash`.
 - The application container uses internal port `3000` and host port `3300` so it does not collide with existing services. No nginx configuration is changed by this repository.
@@ -557,9 +560,7 @@ Operational progress:
 
 Remaining AWS operations:
 
-- confirm that the ALB HTTPS certificate contains `cobolai.penvot.com` and `physicalai.penvot.com` or `*.penvot.com`;
-- run the first deployment through the existing `t3a` SSH alias and verify the `cobolai` container health check on `/en`;
-- verify the ALB target is healthy and the two host rules route to the intended target groups;
+- keep the existing Route 53 and ALB host rules unchanged and verify the `cobolai` target remains healthy on `/en` after each deployment;
 - verify the Vertex service account has Vertex AI User permission in `GOOGLE_CLOUD_PROJECT`;
 - verify CloudWatch memory, CPU, disk, and restart behavior after the first deployment;
 - add a rollback command that reloads the previous image tar or tag without touching other containers.
@@ -579,6 +580,8 @@ Test plan after the current implementation:
 - UI tests for Analysis Quality, System Map filters, Ask AI fallback, and Source Evidence;
 - security tests proving repository code is never executed and symlinks/ignored directories are skipped;
 - production deployment test on the AWS private instance through the existing shell deployment path.
+
+Regression coverage now includes project-isolated run selection and protection against a newer empty run hiding the last valid CardDemo analysis.
 
 ## Deployment Strategy
 

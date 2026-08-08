@@ -64,9 +64,18 @@ export type NeighborhoodGraph = {
 
 export type SystemMapViewModel = {
   databaseReady: boolean;
+  projects: AnalysisProjectSummary[];
+  selectedProject: AnalysisProjectSummary | null;
   quality: AnalysisQualitySummary | null;
   searchResults: EntitySearchResult[];
   graph: NeighborhoodGraph | null;
+};
+
+export type AnalysisProjectSummary = {
+  id: string;
+  name: string;
+  generatedAt: string;
+  entityCount: number;
 };
 
 export type SystemMapFilters = {
@@ -78,7 +87,7 @@ export type SystemMapFilters = {
 export function getLatestAnalysisRun(databasePath = defaultDatabasePath) {
   const { sqlite } = openAnalysisDatabase(databasePath);
   try {
-    return sqlite.prepare(`SELECT id, generated_at AS generatedAt, coverage_json AS coverageJson FROM analysis_runs ORDER BY generated_at DESC LIMIT 1`).get() as { id: string; generatedAt: string; coverageJson: string } | undefined;
+    return selectLatestValidRun(sqlite);
   } finally {
     sqlite.close();
   }
@@ -87,6 +96,7 @@ export function getLatestAnalysisRun(databasePath = defaultDatabasePath) {
 export function getSystemMapViewModel(options: {
   query?: string;
   entityId?: string;
+  projectId?: string;
   databasePath?: string;
   hopLimit?: 1 | 2 | 3;
   filters?: SystemMapFilters;
@@ -95,6 +105,8 @@ export function getSystemMapViewModel(options: {
   if (!fs.existsSync(/* turbopackIgnore: true */ databasePath)) {
     return {
       databaseReady: false,
+      projects: [],
+      selectedProject: null,
       quality: null,
       searchResults: [],
       graph: null,
@@ -103,18 +115,18 @@ export function getSystemMapViewModel(options: {
 
   const { sqlite } = openAnalysisDatabase(databasePath);
   try {
-    const run = sqlite
-      .prepare(
-        `SELECT id, generated_at AS generatedAt, coverage_json AS coverageJson
-         FROM analysis_runs
-         ORDER BY generated_at DESC
-         LIMIT 1`,
-      )
-      .get() as { id: string; generatedAt: string; coverageJson: string } | undefined;
+    const projects = listProjects(sqlite);
+    const selectedProject = projects.find((project) => project.id === options.projectId)
+      ?? projects.find((project) => project.id === "carddemo")
+      ?? projects[0]
+      ?? null;
+    const run = selectedProject ? selectLatestValidRun(sqlite, selectedProject.id) : undefined;
 
     if (!run) {
       return {
         databaseReady: true,
+        projects,
+        selectedProject,
         quality: null,
         searchResults: [],
         graph: null,
@@ -126,6 +138,8 @@ export function getSystemMapViewModel(options: {
 
     return {
       databaseReady: true,
+      projects,
+      selectedProject,
       quality: getQualitySummary(sqlite, run),
       searchResults,
       graph: selectedEntityId
@@ -135,6 +149,42 @@ export function getSystemMapViewModel(options: {
   } finally {
     sqlite.close();
   }
+}
+
+function selectLatestValidRun(
+  sqlite: ReturnType<typeof openAnalysisDatabase>["sqlite"],
+  projectId?: string,
+) {
+  const projectClause = projectId ? "AND r.project_id = ?" : "";
+  return sqlite
+    .prepare(
+      `SELECT r.id, r.generated_at AS generatedAt, r.coverage_json AS coverageJson
+       FROM analysis_runs r
+       WHERE EXISTS (SELECT 1 FROM entities e WHERE e.run_id = r.id)
+         ${projectClause}
+       ORDER BY r.generated_at DESC
+       LIMIT 1`,
+    )
+    .get(...(projectId ? [projectId] : [])) as { id: string; generatedAt: string; coverageJson: string } | undefined;
+}
+
+function listProjects(sqlite: ReturnType<typeof openAnalysisDatabase>["sqlite"]): AnalysisProjectSummary[] {
+  return sqlite
+    .prepare(
+      `SELECT p.id, p.name, r.generated_at AS generatedAt,
+              (SELECT COUNT(*) FROM entities e WHERE e.run_id = r.id) AS entityCount
+       FROM projects p
+       JOIN analysis_runs r ON r.id = (
+         SELECT candidate.id
+         FROM analysis_runs candidate
+         WHERE candidate.project_id = p.id
+           AND EXISTS (SELECT 1 FROM entities e WHERE e.run_id = candidate.id)
+         ORDER BY candidate.generated_at DESC
+         LIMIT 1
+       )
+       ORDER BY CASE WHEN p.id = 'carddemo' THEN 0 ELSE 1 END, r.generated_at DESC`,
+    )
+    .all() as AnalysisProjectSummary[];
 }
 
 function getQualitySummary(
