@@ -23,6 +23,9 @@
 # local analysis fixtures and outputs
 /.cache/
 /analysis-output/
+!/analysis-output/
+/analysis-output/*
+!/analysis-output/carddemo.sqlite
 
 # misc
 .DS_Store
