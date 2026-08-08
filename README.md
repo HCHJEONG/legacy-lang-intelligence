@@ -72,9 +72,18 @@ By default this writes:
 
 `analysis-output/carddemo.sqlite`
 
+To enable the optional verified-context Gemini explanation layer, configure the key on the server only:
+
+```bash
+GEMINI_API_KEY=your-key
+GEMINI_MODEL=gemini-2.0-flash
+```
+
+Without a key, Ask AI returns a deterministic summary from the SQLite graph and source evidence.
+
 ## Current MVP Scope
 
-The current implementation covers steps 1 through 9 of the plan:
+The current implementation covers steps 1 through 14 of the plan:
 
 1. Next.js TypeScript app initialization
 2. CardDemo fixture/clone strategy
@@ -85,8 +94,13 @@ The current implementation covers steps 1 through 9 of the plan:
 7. CardDemo baseline coverage report
 8. tolerant COBOL source normalization
 9. SQLite persistence schema and CardDemo persistence script
+10. Persisted entities, relations, evidence, and coverage
+11. Deterministic SQLite query layer
+12. Analysis Quality dashboard
+13. Search-first System Map and source evidence viewer
+14. Verified-context Ask AI with Gemini and deterministic fallback
 
-The next product-facing phase is querying persisted entities and relations for the System Map and Ask AI layers.
+The next phase is public GitHub URL based ingestion with isolated repository handling.
 
 ## Product UX Principle
 
