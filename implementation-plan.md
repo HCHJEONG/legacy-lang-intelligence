@@ -90,7 +90,7 @@ Each extracted relationship should include source evidence and a confidence valu
 
 ### 5. Benchmark `cobol-intel`
 
-Status: next.
+Status: complete.
 
 Before designing the final persistence schema, evaluate `cobol-intel` directly against CardDemo.
 
@@ -113,9 +113,13 @@ Deliverable:
 - a captured sample output under an ignored local analysis path or a small committed redacted fixture if appropriate;
 - a recommendation: adopt as primary engine, use as optional engine, or reject.
 
+Result:
+
+`cobol-intel==0.3.1` is installable and promising on simple COBOL, but it failed all CardDemo COBOL files tested. Treat it as an optional research/benchmark engine for now, not the primary engine. See `docs/cobol-intel-benchmark.md`.
+
 ### 6. Define The Analysis Adapter And Normalized Schema
 
-Status: pending.
+Status: next.
 
 Design the internal analysis contract after the `cobol-intel` benchmark.
 
