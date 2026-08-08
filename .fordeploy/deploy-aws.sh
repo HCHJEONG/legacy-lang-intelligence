@@ -12,6 +12,7 @@ set -euo pipefail
 : "${MEDIUM_INSTANCE_ID:=i-0c66613ecf80dc3cb}"
 : "${CONFIGURE_ALB:=1}"
 : "${LEGACY_LANG_ENV_FILE_SOURCE:=/mnt/j/VSCodeProjects/legacy-lang-intelligence/.fordeploy/aws-backup/.env.local}"
+: "${LEGACY_LANG_GCP_KEY_SOURCE:=/mnt/j/VSCodeProjects/legacy-lang-intelligence/.fordeploy/aws-backup/gcp-key.json}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
@@ -33,6 +34,18 @@ if [ ! -f "$ROOT_DIR/.env.local" ]; then
 else
   ENV_LOCAL_BACKUP="$ROOT_DIR/.env.local.bak.$(date +%Y%m%d%H%M%S)"
   cp "$ROOT_DIR/.env.local" "$ENV_LOCAL_BACKUP"
+fi
+
+GCP_KEY_BACKUP=""
+if [ ! -f "$ROOT_DIR/gcp-key.json" ]; then
+  if [ ! -f "$LEGACY_LANG_GCP_KEY_SOURCE" ]; then
+    echo "missing deployment GCP key: $LEGACY_LANG_GCP_KEY_SOURCE" >&2
+    exit 1
+  fi
+  cp "$LEGACY_LANG_GCP_KEY_SOURCE" "$ROOT_DIR/gcp-key.json"
+else
+  GCP_KEY_BACKUP="$ROOT_DIR/gcp-key.json.bak.$(date +%Y%m%d%H%M%S)"
+  cp "$ROOT_DIR/gcp-key.json" "$GCP_KEY_BACKUP"
 fi
 
 if [ ! -f "$ROOT_DIR/analysis-output/carddemo.sqlite" ]; then
@@ -59,6 +72,11 @@ IMAGE_BASENAME="$(basename "$IMAGE_FILE")"
 cleanup() {
   rm -f "$IMAGE_FILE"
   restore_env_local
+  if [ -n "$GCP_KEY_BACKUP" ]; then
+    mv -f "$GCP_KEY_BACKUP" "$ROOT_DIR/gcp-key.json"
+  else
+    rm -f "$ROOT_DIR/gcp-key.json"
+  fi
 }
 trap cleanup EXIT
 
