@@ -115,6 +115,18 @@ export const CoverageReportSchema = z.object({
   confidenceDistribution: z.record(z.string(), z.number().int().nonnegative()),
   entityTypes: z.record(z.string(), z.number().int().nonnegative()),
   relationTypes: z.record(z.string(), z.number().int().nonnegative()),
+  normalization: z
+    .object({
+      filesNormalized: z.number().int().nonnegative(),
+      originalLineCount: z.number().int().nonnegative(),
+      normalizedLineCount: z.number().int().nonnegative(),
+      commentLinesRemoved: z.number().int().nonnegative(),
+      blankLinesRemoved: z.number().int().nonnegative(),
+      headerLinesRemoved: z.number().int().nonnegative(),
+      continuationLinesJoined: z.number().int().nonnegative(),
+      fixedFormatLikelyFiles: z.number().int().nonnegative(),
+    })
+    .optional(),
 });
 
 export const NormalizedAnalysisRunSchema = z.object({

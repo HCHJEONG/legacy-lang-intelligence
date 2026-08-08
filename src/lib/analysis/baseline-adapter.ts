@@ -229,7 +229,30 @@ function buildCoverageReport(
     ),
     entityTypes: countBy(entities, (entity) => entity.type),
     relationTypes: countBy(relations, (relation) => relation.type),
+    normalization: buildNormalizationCoverage(analysis),
   };
+}
+
+function buildNormalizationCoverage(analysis: StaticAnalysisResult): NormalizedAnalysisRun["coverage"]["normalization"] {
+  const normalizerRuns = analysis.fileAnalysis.filter((item) => item.analyzer === "cobol-normalizer");
+
+  return {
+    filesNormalized: normalizerRuns.length,
+    originalLineCount: sumMetric(normalizerRuns, "originalLineCount"),
+    normalizedLineCount: sumMetric(normalizerRuns, "normalizedLineCount"),
+    commentLinesRemoved: sumMetric(normalizerRuns, "commentLinesRemoved"),
+    blankLinesRemoved: sumMetric(normalizerRuns, "blankLinesRemoved"),
+    headerLinesRemoved: sumMetric(normalizerRuns, "headerLinesRemoved"),
+    continuationLinesJoined: sumMetric(normalizerRuns, "continuationLinesJoined"),
+    fixedFormatLikelyFiles: normalizerRuns.filter((item) => item.metrics.fixedFormatLikely === true).length,
+  };
+}
+
+function sumMetric(items: Array<{ metrics: Record<string, unknown> }>, key: string): number {
+  return items.reduce((total, item) => {
+    const value = item.metrics[key];
+    return total + (typeof value === "number" ? value : 0);
+  }, 0);
 }
 
 function pushEvidence(

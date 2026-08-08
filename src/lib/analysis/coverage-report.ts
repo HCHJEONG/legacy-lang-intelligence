@@ -142,6 +142,10 @@ export function renderCoverageMarkdown(report: BaselineCoverageReport): string {
     "",
     ...table(["Band", "Count"], Object.entries(report.coverage.confidenceDistribution)),
     "",
+    "## COBOL Normalization",
+    "",
+    ...normalizationLines(report),
+    "",
     "## Top Unresolved Findings",
     "",
     ...table(
@@ -173,6 +177,24 @@ export function renderCoverageMarkdown(report: BaselineCoverageReport): string {
   ];
 
   return `${lines.join("\n")}\n`;
+}
+
+function normalizationLines(report: BaselineCoverageReport): string[] {
+  const normalization = report.coverage.normalization;
+  if (!normalization) {
+    return ["No normalization metrics available."];
+  }
+
+  return [
+    `- Files normalized: ${normalization.filesNormalized}`,
+    `- Original lines: ${normalization.originalLineCount}`,
+    `- Normalized lines: ${normalization.normalizedLineCount}`,
+    `- Comment lines removed: ${normalization.commentLinesRemoved}`,
+    `- Blank/empty lines removed: ${normalization.blankLinesRemoved}`,
+    `- Header lines stripped: ${normalization.headerLinesRemoved}`,
+    `- Continuation lines joined: ${normalization.continuationLinesJoined}`,
+    `- Fixed-format likely files: ${normalization.fixedFormatLikelyFiles}`,
+  ];
 }
 
 function topFindings(findings: AnalyzerFinding[], limit: number): CoverageHotspot[] {

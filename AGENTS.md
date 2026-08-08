@@ -67,10 +67,13 @@ Normalized IR is the product center. UI, Ask AI, Mermaid, XYFlow, and SQLite sho
 
 This project is a legacy comprehension utility, not a COBOL compiler. Do not optimize for strict parse success at the expense of useful partial analysis.
 
+The project should own a tolerant COBOL normalization layer before any strict parsing assumptions. This layer should absorb common real-world COBOL noise such as fixed-format columns, sequence numbers, comment banners, `AUTHOR`, `INSTALLATION`, `DATE-WRITTEN`, `DATE-COMPILED`, `SECURITY`, and other identification/header paragraphs while preserving original source line mapping for evidence.
+
 Prefer tolerant extraction:
 
 - extract what is statically knowable;
 - attach source evidence and source locations whenever possible;
+- preserve original source locations even when analyzing normalized text;
 - mark unresolved, unsupported, dynamic, or low-confidence findings explicitly;
 - preserve analyzer id, analyzer version, extraction method, confidence, and confidence reason;
 - report coverage honestly instead of pretending analysis is complete.
@@ -80,6 +83,7 @@ Primary benchmark metrics should be:
 - meaningful entities extracted;
 - meaningful relations extracted;
 - evidence coverage;
+- normalization coverage;
 - unresolved reference counts;
 - unsupported construct counts;
 - confidence distribution;
@@ -105,6 +109,7 @@ Raw Mermaid generated directly by the LLM should not be trusted as factual graph
 - Keep parser/static analysis code separate from AI code.
 - Keep engine-native output separate from the normalized analysis model.
 - Treat coverage reports as first-class artifacts.
+- Treat source normalization metrics and source maps as first-class analysis artifacts.
 - Prefer deterministic graph traversal before any LLM explanation.
 - Avoid introducing vector search until structured graph retrieval proves insufficient.
 - Keep CardDemo source outside this repository unless a fixture strategy is explicitly documented.

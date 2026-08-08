@@ -23,6 +23,12 @@ export type DiscoveredFile = {
   signals: string[];
 };
 
+export type FileAnalysisMetadata = {
+  filePath: string;
+  analyzer: string;
+  metrics: Record<string, unknown>;
+};
+
 export type AnalysisEntity = {
   id: string;
   type:
@@ -65,6 +71,7 @@ export type StaticAnalysisResult = {
   files: DiscoveredFile[];
   entities: AnalysisEntity[];
   dependencies: AnalysisDependency[];
+  fileAnalysis: FileAnalysisMetadata[];
   summary: {
     filesByKind: Record<SourceKind, number>;
     entitiesByType: Record<string, number>;

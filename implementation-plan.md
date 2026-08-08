@@ -20,6 +20,8 @@ The long-term compounding value is likely not "owning a compiler." It is toleran
 
 This product is a legacy comprehension utility, not a COBOL compiler. Partial analysis is acceptable and should be reported honestly.
 
+One part of that asset is a tolerant COBOL normalization layer that strips or classifies real-world header/noise constructs while preserving original source locations for evidence.
+
 ## Current Project State
 
 Steps 1 through 4 are already implemented as a baseline:
@@ -247,7 +249,50 @@ Result:
 - First CardDemo baseline coverage: entity coverage 67.9%, relation coverage 65.8%, evidence coverage 100.0%, unresolved findings 446.
 - Highest-impact next improvements are external/system copybooks, dynamic CICS transaction handling, DB2 table entity creation, runtime/library call classification, JCL utility program classification, and dataset/file entity creation.
 
-### 8. Add SQLite Persistence
+### 8. Add Tolerant COBOL Normalization
+
+Status: complete.
+
+Before adding SQLite, add a source normalization layer used by the baseline analyzer.
+
+The goal is not to compile COBOL. The goal is to produce extraction-safe text while preserving enough source mapping to prove every claim against the original source.
+
+The normalizer should handle:
+
+- fixed-format source columns;
+- sequence numbers;
+- indicator column comments and continuations;
+- comment and license banners;
+- identification/header paragraphs such as `AUTHOR`, `INSTALLATION`, `DATE-WRITTEN`, `DATE-COMPILED`, and `SECURITY`;
+- `CONFIGURATION SECTION` and other structural lines that are useful as skeleton information but should not block partial extraction;
+- source line mapping from normalized lines back to original source lines.
+
+Outputs should include:
+
+- normalized lines;
+- original line mapping;
+- removed or classified header/noise blocks;
+- normalization metrics;
+- unsupported or partially supported constructs.
+
+Coverage should report:
+
+- header lines stripped;
+- comment lines stripped;
+- continuation lines joined;
+- normalized line count;
+- extraction-safe line count;
+- unsupported header/structure constructs.
+
+Result:
+
+- `src/lib/analysis/cobol-normalizer.ts` normalizes COBOL source while preserving original line mapping.
+- The baseline COBOL analyzer now extracts from normalized text while evidence still points to original source lines.
+- Normalization metrics are included in the Normalized IR coverage report.
+- First CardDemo normalization run covered 45 COBOL files, 30595 original lines, 23130 normalized lines, 3470 removed comment lines, 3932 removed blank/empty lines, 52 stripped header lines, and 11 joined continuation lines.
+- The normalization pass reduced unresolved findings from 446 to 444 by removing noise before extraction.
+
+### 9. Add SQLite Persistence
 
 Status: next.
 
@@ -268,7 +313,7 @@ Minimum tables:
 
 Use JSON metadata columns where helpful, but keep entity and dependency types explicit enough for graph queries.
 
-### 9. Persist Entities, Dependencies, Evidence, And Coverage
+### 10. Persist Entities, Dependencies, Evidence, And Coverage
 
 Status: pending.
 
@@ -301,7 +346,7 @@ Do not create relationships that are not backed by static evidence.
 
 Analyzer disagreement should not be hidden. When multiple analyzers disagree, lower confidence or mark the finding for review instead of silently choosing one.
 
-### 10. Build System Map And Source Viewer
+### 11. Build System Map And Source Viewer
 
 Status: pending.
 
@@ -324,7 +369,7 @@ Build a lightweight read-only Source Viewer:
 - highlight selected lines;
 - link graph nodes and evidence references to source locations.
 
-### 11. Build Ask AI With Verified Visual Answers
+### 12. Build Ask AI With Verified Visual Answers
 
 Status: pending.
 
@@ -356,7 +401,7 @@ Answer flow:
 
 The LLM must not generate factual graph edges. It may only explain verified graph data.
 
-### 12. Add GitHub URL Based Ingestion UX
+### 13. Add GitHub URL Based Ingestion UX
 
 Status: pending.
 

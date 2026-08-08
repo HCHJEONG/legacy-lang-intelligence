@@ -1,24 +1,27 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
+import { normalizeCobolSource, type CobolNormalizationResult } from "./cobol-normalizer";
 import type {
   AnalysisDependency,
   AnalysisEntity,
   DiscoveredFile,
   Evidence,
+  FileAnalysisMetadata,
   StaticAnalysisResult,
 } from "./types";
 
 type MutableResult = {
   entities: AnalysisEntity[];
   dependencies: AnalysisDependency[];
+  fileAnalysis: FileAnalysisMetadata[];
 };
 
 export async function analyzeDiscoveredFiles(
   sourceRoot: string,
   files: DiscoveredFile[],
 ): Promise<StaticAnalysisResult> {
-  const result: MutableResult = { entities: [], dependencies: [] };
+  const result: MutableResult = { entities: [], dependencies: [], fileAnalysis: [] };
 
   for (const file of files) {
     if (!["cobol", "copybook", "jcl"].includes(file.kind)) {
@@ -43,6 +46,7 @@ export async function analyzeDiscoveredFiles(
     files,
     entities: result.entities,
     dependencies: result.dependencies,
+    fileAnalysis: result.fileAnalysis,
     summary: {
       filesByKind: countBy(files, (file) => file.kind, [
         "cobol",
@@ -60,7 +64,15 @@ export async function analyzeDiscoveredFiles(
 }
 
 function analyzeCobolFile(file: DiscoveredFile, lines: string[], result: MutableResult) {
-  const programMatch = findLine(lines, /\bPROGRAM-ID\s*\.\s*([A-Z0-9_-]+)/i);
+  const normalization = normalizeCobolSource(lines);
+  const normalizedLines = normalization.lines.map((line) => line.text);
+  result.fileAnalysis.push({
+    filePath: file.relativePath,
+    analyzer: "cobol-normalizer",
+    metrics: normalization.metrics,
+  });
+
+  const programMatch = findLine(normalizedLines, /\bPROGRAM-ID\s*\.\s*([A-Z0-9_-]+)/i);
   const programName =
     programMatch?.match[1] ?? path.basename(file.relativePath, path.extname(file.relativePath)).toUpperCase();
   const programEntity = pushEntity(result, {
@@ -68,63 +80,64 @@ function analyzeCobolFile(file: DiscoveredFile, lines: string[], result: Mutable
     name: programName,
     qualifiedName: `program:${programName}`,
     filePath: file.relativePath,
-    evidence: programMatch ? evidence(file, lines, programMatch.lineNumber) : evidence(file, lines, 1),
+    evidence: programMatch ? normalizedEvidence(file, lines, normalization, programMatch.lineNumber) : evidence(file, lines, 1),
     metadata: {
       fallbackName: !programMatch,
+      normalization: normalization.metrics,
     },
   });
 
-  forEachCobolLineMatch(lines, /\bCALL\s+['"]?([A-Z0-9_-]+)['"]?/gi, (match, lineNumber) => {
+  forEachLineMatch(normalizedLines, /\bCALL\s+['"]?([A-Z0-9_-]+)['"]?/gi, (match, lineNumber) => {
     pushDependency(result, {
       type: "CALLS",
       sourceId: programEntity.id,
       targetName: match[1],
-      evidence: evidence(file, lines, lineNumber),
+      evidence: normalizedEvidence(file, lines, normalization, lineNumber),
       confidence: 0.9,
     });
   });
 
-  forEachCobolLineMatch(lines, /\bCOPY\s+([A-Z0-9_-]+)/gi, (match, lineNumber) => {
+  forEachLineMatch(normalizedLines, /\bCOPY\s+([A-Z0-9_-]+)/gi, (match, lineNumber) => {
     pushDependency(result, {
       type: "INCLUDES_COPYBOOK",
       sourceId: programEntity.id,
       targetName: match[1],
-      evidence: evidence(file, lines, lineNumber),
+      evidence: normalizedEvidence(file, lines, normalization, lineNumber),
       confidence: 0.9,
     });
   });
 
-  forEachBlockMatch(lines, /\bEXEC\s+SQL\b([\s\S]*?)\bEND-EXEC\b/gi, (match, lineNumber) => {
+  forEachBlockMatch(normalizedLines, /\bEXEC\s+SQL\b([\s\S]*?)\bEND-EXEC\b/gi, (match, lineNumber) => {
     for (const table of extractSqlTableNames(match[0])) {
       pushDependency(result, {
         type: "USES_TABLE",
         sourceId: programEntity.id,
         targetName: table,
-        evidence: evidence(file, lines, lineNumber),
+        evidence: normalizedEvidence(file, lines, normalization, lineNumber),
         confidence: 0.72,
       });
     }
   });
 
-  forEachBlockMatch(lines, /\bEXEC\s+CICS\b([\s\S]*?)\bEND-EXEC\b/gi, (match, lineNumber) => {
+  forEachBlockMatch(normalizedLines, /\bEXEC\s+CICS\b([\s\S]*?)\bEND-EXEC\b/gi, (match, lineNumber) => {
     const transactionId = match[0].match(/\bTRANSID\s*\(?\s*['"]?([A-Z0-9_-]+)/i)?.[1];
     if (transactionId) {
       pushDependency(result, {
         type: "INVOKES_TRANSACTION",
         sourceId: programEntity.id,
         targetName: transactionId,
-        evidence: evidence(file, lines, lineNumber),
+        evidence: normalizedEvidence(file, lines, normalization, lineNumber),
         confidence: 0.7,
       });
     }
   });
 
-  forEachCobolLineMatch(lines, /\b(?:SELECT|FD)\s+([A-Z0-9_-]+)/gi, (match, lineNumber) => {
+  forEachLineMatch(normalizedLines, /\b(?:SELECT|FD)\s+([A-Z0-9_-]+)/gi, (match, lineNumber) => {
     pushDependency(result, {
       type: "USES_FILE",
       sourceId: programEntity.id,
       targetName: match[1],
-      evidence: evidence(file, lines, lineNumber),
+      evidence: normalizedEvidence(file, lines, normalization, lineNumber),
       confidence: 0.62,
     });
   });
@@ -264,6 +277,25 @@ function evidence(file: DiscoveredFile, lines: string[], lineNumber: number): Ev
   };
 }
 
+function normalizedEvidence(
+  file: DiscoveredFile,
+  originalLines: string[],
+  normalization: CobolNormalizationResult,
+  normalizedLineNumber: number,
+): Evidence {
+  const normalizedLine = normalization.lines[normalizedLineNumber - 1];
+  if (!normalizedLine) {
+    return evidence(file, originalLines, 1);
+  }
+
+  return {
+    filePath: file.relativePath,
+    startLine: normalizedLine.originalStartLine,
+    endLine: normalizedLine.originalEndLine,
+    snippet: originalLines[normalizedLine.originalStartLine - 1]?.trim() ?? normalizedLine.text.trim(),
+  };
+}
+
 function findLine(lines: string[], pattern: RegExp) {
   for (let index = 0; index < lines.length; index += 1) {
     const match = lines[index].match(pattern);
@@ -287,27 +319,6 @@ function forEachLineMatch(
       callback(match, index + 1);
     }
   }
-}
-
-function forEachCobolLineMatch(
-  lines: string[],
-  pattern: RegExp,
-  callback: (match: RegExpExecArray, lineNumber: number) => void,
-) {
-  forEachLineMatch(lines, pattern, (match, lineNumber) => {
-    if (!isCobolCommentLine(lines[lineNumber - 1])) {
-      callback(match, lineNumber);
-    }
-  });
-}
-
-function isCobolCommentLine(line: string): boolean {
-  const trimmed = line.trimStart();
-  if (trimmed.startsWith("*") || trimmed.startsWith("*>")) {
-    return true;
-  }
-
-  return line.length >= 7 && ["*", "/", "D"].includes(line.charAt(6).toUpperCase());
 }
 
 function forEachBlockMatch(
