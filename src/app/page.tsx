@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { SystemMapFlow } from "@/components/system-map-flow";
 import { AskAiPanel } from "@/components/ask-ai-panel";
+import { RepositoryIngestionPanel } from "@/components/repository-ingestion-panel";
 import { getSystemMapViewModel } from "@/lib/db/analysis-queries";
 
 type HomeProps = {
@@ -62,6 +63,7 @@ export default async function Home({ searchParams }: HomeProps) {
             </aside>
 
             <section className="space-y-5">
+              <RepositoryIngestionPanel />
               <SystemMapPanel graph={viewModel.graph} query={query} hopLimit={hopLimit} filters={filters} />
               <AskAiPanel />
               <EvidencePanel graph={viewModel.graph} />

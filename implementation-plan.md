@@ -494,7 +494,7 @@ Current result:
 
 ### 15. Add GitHub URL Based Ingestion UX
 
-Status: pending.
+Status: in progress.
 
 This is the major product differentiator.
 
@@ -514,6 +514,13 @@ Security and operational constraints:
 - clone into isolated, ignored, or disposable workspace paths;
 - expose safe error messages;
 - record source URL and commit SHA for each analysis run.
+
+Current result:
+
+- The home screen now clearly separates `Public repo = Free`, `Private repo = Contact us`, and `Source cannot leave company = Contact us`.
+- `src/app/api/ingest/route.ts` validates public GitHub repository URLs and returns an explicit contact branch for private or source-restricted requests.
+- `src/components/repository-ingestion-panel.tsx` makes source handling and the no-code-execution policy visible before ingestion.
+- Actual isolated clone, commit pinning, analysis job progress, and persistence replacement remain the next implementation slice of this stage.
 
 ## Deployment Strategy
 
