@@ -62,16 +62,31 @@ This writes:
 
 That output is also ignored by git because it is generated local analysis data.
 
+To persist the latest Normalized IR into SQLite:
+
+```bash
+npm run persist
+```
+
+By default this writes:
+
+`analysis-output/carddemo.sqlite`
+
 ## Current MVP Scope
 
-The current implementation covers steps 1 through 4 of the plan:
+The current implementation covers steps 1 through 9 of the plan:
 
 1. Next.js TypeScript app initialization
 2. CardDemo fixture/clone strategy
 3. File discovery and classification
 4. Minimal COBOL, Copybook, and JCL static analysis
+5. `cobol-intel` benchmark
+6. Normalized IR, provenance, and coverage model
+7. CardDemo baseline coverage report
+8. tolerant COBOL source normalization
+9. SQLite persistence schema and CardDemo persistence script
 
-SQLite/Drizzle persistence starts after the first analysis pass clarifies the actual CardDemo artifact shapes.
+The next product-facing phase is querying persisted entities and relations for the System Map and Ask AI layers.
 
 ## Source Attribution
 

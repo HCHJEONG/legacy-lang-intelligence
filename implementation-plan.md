@@ -294,7 +294,7 @@ Result:
 
 ### 9. Add SQLite Persistence
 
-Status: next.
+Status: complete.
 
 Add SQLite with Drizzle ORM after the normalized analysis contract is defined.
 
@@ -313,9 +313,18 @@ Minimum tables:
 
 Use JSON metadata columns where helpful, but keep entity and dependency types explicit enough for graph queries.
 
+Result:
+
+- `drizzle-orm` and `better-sqlite3` are installed for local SQLite persistence.
+- `src/lib/db/schema.ts` defines the query-facing SQLite/Drizzle table schema.
+- `src/lib/db/bootstrap.ts` creates the SQLite tables and indexes without requiring a migration generator.
+- `src/lib/db/client.ts` opens SQLite with foreign keys and WAL mode enabled.
+- `scripts/persist-carddemo-analysis.ts` persists `analysis-output/carddemo-normalized-ir.json` into `analysis-output/carddemo.sqlite`.
+- `npm run persist` is the local persistence command.
+
 ### 10. Persist Entities, Dependencies, Evidence, And Coverage
 
-Status: pending.
+Status: in progress.
 
 Normalize extracted analysis into entities, relations, evidence records, analyzer findings, and coverage reports.
 
@@ -345,6 +354,12 @@ Initial dependency types:
 Do not create relationships that are not backed by static evidence.
 
 Analyzer disagreement should not be hidden. When multiple analyzers disagree, lower confidence or mark the finding for review instead of silently choosing one.
+
+Current result:
+
+- The persistence path writes normalized entities, relations, evidence, provenance, analyzer findings, and the coverage report into SQLite.
+- `source_files` are currently inferred from entity, evidence, and finding source paths. Later GitHub URL ingestion should persist full discovered file inventory, including unknown files with no extracted entities.
+- The physical table is named `relations` to match the Normalized IR. It fills the dependency role described in this step.
 
 ### 11. Build System Map And Source Viewer
 
