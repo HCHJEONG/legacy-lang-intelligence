@@ -85,7 +85,7 @@ Without a key, Ask AI returns a deterministic summary from the SQLite graph and 
 
 ## Current MVP Scope
 
-The current implementation covers steps 1 through 14 of the plan:
+The current implementation covers steps 1 through 15 of the plan:
 
 1. Next.js TypeScript app initialization
 2. CardDemo fixture/clone strategy
@@ -101,8 +101,9 @@ The current implementation covers steps 1 through 14 of the plan:
 12. Analysis Quality dashboard
 13. Search-first System Map and source evidence viewer
 14. Verified-context Ask AI with Gemini and deterministic fallback
+15. Public GitHub fetch, analysis, persistence, and ingestion status tracking
 
-The next phase is public GitHub URL based ingestion with isolated repository handling.
+The next phase is production ingestion hardening and deployment verification.
 
 ## Language Support
 
@@ -129,6 +130,15 @@ Use this flow:
 `Search -> Entity -> Neighborhood -> Follow relation -> Source`
 
 The app should show Analysis Quality before or alongside graph exploration so users can see what the analyzer verified and what remains unresolved.
+
+## Remaining Work
+
+- Verify the ALB HTTPS certificate covers `cobolai.penvot.com` and `physicalai.penvot.com`.
+- Run the first `.fordeploy/deploy-aws.sh` deployment through the existing LawVot `t3a` SSH alias.
+- Confirm ALB target health, `/en` health checks, host routing, and port `3300` isolation.
+- Verify the GCP service account has Vertex AI permissions and Ask AI works with the packaged `/app/gcp-key.json`.
+- Complete asynchronous ingestion workers, progress UI, cancellation, concurrency limits, duplicate commit reuse, and retention cleanup.
+- Add automated integration, security, localization, and production deployment tests.
 
 ## Source Attribution
 
