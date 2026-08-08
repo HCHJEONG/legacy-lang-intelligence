@@ -558,6 +558,15 @@ Operational progress:
 - `GET /api/ingest/status?runId=...` exposes the current status for a future progress UI.
 - A `t3a.medium` is the recommended initial host when the existing `t3a.small` already runs two containers: both have 2 vCPUs, but medium provides 4 GiB versus small's 2 GiB. Keep ingestion concurrency at one until CloudWatch memory/CPU/credit metrics justify a larger or separate worker host.
 
+Confirmed defect-remediation backlog:
+
+- **P1: make persisted analysis identifiers project/run scoped.** Entity, relation, evidence, provenance, finding, coverage, and source-file primary keys must not collide when the same repository is analyzed again or when different repositories contain matching qualified names or relative paths. Re-analysis should replace or retain prior project runs atomically, and integration coverage must exercise both repeated ingestion and overlapping names across projects.
+- **P1: enforce ingestion limits before and during analysis.** Oversized files must count toward the repository byte limit even when they are excluded from analysis, and the discovery/analyzer path must never read a file exceeding `maxFileBytes`. Include clone workspace usage in operational safeguards, reject over-limit input before expensive analysis where possible, and clean successful ingestion workspaces according to a documented retention policy.
+- **P1: persist runtime analysis data across container replacement.** Mount `analysis-output` or the SQLite database on an explicit host path or named volume so that `docker rm` and redeployment do not discard user-ingested projects. Document backup, restore, permissions, WAL companion-file handling, and rollback behavior.
+- **P2: correct bidirectional multi-hop graph traversal and Ask AI directionality.** Incoming relations must expand their source entity while outgoing relations expand their target entity, with visited-node handling that prevents cycles. Ask AI must distinguish upstream sources from downstream targets instead of describing every edge through `edge.target`. Add tests for incoming, outgoing, cyclic, and mixed 1-hop/2-hop/3-hop neighborhoods.
+- **P2: make System Map entity-type and confidence filters submit and persist correctly.** Place filter controls in the submitted form or add an explicit change/submit path, preserve all active filters in search, hop, project, and relation-follow links, and cover the resulting query state with UI tests.
+- **P2: make ingestion status observable while work is running.** `POST /api/ingest` should validate the request, persist a queued run, and return its run id immediately. Fetch, analysis, and persistence should run in a bounded worker so the client can poll status, display real progress, cancel work, and recover from request or process restarts.
+
 Remaining AWS operations:
 
 - keep the existing Route 53 and ALB host rules unchanged and verify the `cobolai` target remains healthy on `/en` after each deployment;
@@ -582,6 +591,126 @@ Test plan after the current implementation:
 - production deployment test on the AWS private instance through the existing shell deployment path.
 
 Regression coverage now includes project-isolated run selection and protection against a newer empty run hiding the last valid CardDemo analysis.
+
+### 17. Deliver The Product UX Improvement In Three Stages
+
+Status: planned.
+
+The next product iteration should move the application from an analyzer-oriented technical dashboard to a developer-oriented legacy comprehension utility. The primary product promise is:
+
+> Help developers understand unfamiliar COBOL systems faster.
+
+The target journey is:
+
+`Question -> explanation -> verified visualization -> dependency -> source evidence`
+
+The work should be delivered as three independently deployable vertical slices. Do not rewrite the existing analyzer, Normalized IR, SQLite persistence, evidence, System Map, or Ask AI architecture unless a verified defect prevents the target journey.
+
+#### Stage 1: Product Entry And Core CardDemo Experience
+
+Goal: a first-time visitor should understand the product within 30 seconds and reach a useful CardDemo explanation with one primary action.
+
+Implementation scope:
+
+- make `/` the primary English product route and keep Korean at `/ko`;
+- update English-first metadata, SEO title and description, and OpenGraph metadata;
+- replace analyzer-first messaging with the value proposition `Understand unfamiliar COBOL systems in minutes.`;
+- provide `Explore CardDemo` as the primary CTA and `Analyze GitHub Repository` as the secondary CTA;
+- explain that AWS CardDemo is a sample mainframe credit-card application containing COBOL, JCL, copybooks, batch jobs, and transaction-processing logic;
+- promote Ask AI to the main product entry point instead of requiring entity-name or System Map knowledge first;
+- provide CardDemo questions that the persisted analysis can answer, including system overview, transaction flow, and major batch jobs;
+- route suggested questions through explicit deterministic intents such as `system-overview`, `transaction-flow`, and `batch-jobs`;
+- return explanation, verified Mermaid when appropriate, and source evidence for the primary transaction-flow question;
+- keep the landing page and basic Ask AI interaction usable on mobile and tablet;
+- retain a deterministic answer when Gemini credentials are absent or an AI request fails.
+
+Stage 1 completion criteria:
+
+- a visitor understands that the product helps comprehend unfamiliar COBOL systems;
+- the visitor understands what CardDemo represents;
+- one click opens the CardDemo experience;
+- one suggested-question click returns explanation, visualization, and evidence;
+- factual Mermaid nodes and edges originate only from Normalized IR queries.
+
+#### Stage 2: Verified Exploration And Impact Analysis
+
+Goal: connect an AI answer to interactive graph exploration and the exact source lines that prove each reported relationship.
+
+Implementation scope:
+
+- simplify workspace navigation to `Ask AI`, `System Map`, `Source`, and `Analysis Quality`;
+- make entities in AI answers and visualizations selectable;
+- provide contextual entity questions such as `Explain this program`, `What calls this?`, `Show dependencies`, `What happens if this changes?`, and `Show source evidence`;
+- choose verified Mermaid for compact flows and `@xyflow/react` for dependency neighborhoods and impact graphs;
+- default System Map to a bounded one-hop neighborhood with optional two-hop and three-hop expansion;
+- continue server-side bounded graph queries and never send or render the complete repository graph by default;
+- aggregate repeated unresolved targets into a summary with an explicit `Show unresolved` action;
+- distinguish analysis status (`Verified`, `Partial`, `Unresolved`) from content origin (`Static analysis`, `AI explanation`);
+- make graph relations and AI evidence links open a Source Viewer with file path, language/type, original line numbers, highlighted evidence, related entity, and related relation;
+- provide navigation back to the AI answer or graph and an action to explore the related entity;
+- implement impact analysis through deterministic traversal, then let Gemini explain the verified impact graph;
+- correct bidirectional traversal and direction-sensitive Ask AI behavior before relying on multi-hop or impact results.
+
+Stage 2 completion criteria:
+
+- a user can select a program from an AI answer and open its dependency neighborhood;
+- selecting a relationship exposes the associated evidence;
+- selecting evidence opens the correct source lines with highlighting;
+- `What happens if this changes?` returns a deterministic impact graph plus explanation and evidence;
+- unresolved references remain visible and honest without dominating the default graph;
+- the complete journey from question to source proof works without requiring prior CardDemo identifier knowledge.
+
+#### Stage 3: Repository Onboarding And Production Polish
+
+Goal: let a developer analyze a supported public GitHub repository and understand the result without landing on an internal metrics dashboard.
+
+Implementation scope:
+
+- simplify the repository form around one public GitHub URL and state that repository code is analyzed but never executed;
+- accurately label public repositories as supported and private/on-premise analysis as unavailable, coming later, or contact-based;
+- return an ingestion run id immediately and connect the UI to real persisted backend phases;
+- expose concrete phases such as cloning, file discovery, COBOL analysis, copybook resolution, JCL analysis, dependency graph construction, coverage calculation, and ready;
+- show the exact failed phase and a safe actionable error instead of a fake progress animation;
+- present an orientation summary after analysis, including COBOL files, programs, copybooks, jobs, verified/partial relationships, and unresolved findings;
+- provide `Ask AI`, `Open System Map`, and `View Analysis Quality` as the next actions after completion;
+- make Analysis Quality explain files analyzed, entity coverage, relation coverage, evidence coverage, unresolved findings, and the difference between repository-wide coverage and finding-level confidence;
+- finish responsive, loading, empty, error, retry, and truncated-result states;
+- prepare anonymous aggregate telemetry hooks for ingestion outcome, file counts, unsupported/unresolved categories, feature and intent usage, graph usage, and duration;
+- never collect source text, source snippets, or private repository contents in default telemetry;
+- update README and AWS/Docker operations documentation and run the complete acceptance journey after deployment.
+
+Stage 3 completion criteria:
+
+- a supported public GitHub repository can be submitted and analyzed without executing its code;
+- progress reflects actual backend phases and failures identify the phase that failed;
+- completion leads to an understandable repository orientation rather than a raw analysis dashboard;
+- Ask AI, System Map, Source Evidence, and Analysis Quality work for the newly persisted project;
+- runtime SQLite data survives container replacement according to the documented persistence strategy.
+
+#### Cross-Stage Product And Safety Rules
+
+- The LLM must not create factual entities, relationships, impact paths, Mermaid edges, or XYFlow edges.
+- Static analysis produces Normalized IR; deterministic queries produce `GraphVisualization`; Gemini explains the verified result.
+- Every reported verified relationship should remain traceable to persisted source evidence.
+- Coverage describes how much of the repository was analyzed; confidence describes the reliability of one finding. The UI must not present them as the same metric.
+- Internal terms such as `Normalized IR`, analyzer ids, and engine versions belong in architecture or secondary quality details, not the primary product hierarchy.
+- The visual priority is user task, answer, visualization, evidence, then technical analysis metadata.
+- Analyzer expansion is in scope only when an analyzer limitation prevents a primary CardDemo or impact-analysis scenario from working.
+
+Final acceptance journey:
+
+1. Open the English landing page and understand the product within 30 seconds.
+2. Understand that CardDemo is a sample mainframe credit-card application.
+3. Open CardDemo with one click.
+4. Run `How does a credit card transaction flow through this system?`.
+5. See an explanation and a verified visual flow.
+6. Select a program in the flow and open its dependency neighborhood.
+7. Select a relationship and inspect its source evidence.
+8. Open the exact highlighted COBOL or JCL source lines.
+9. Run `What happens if this changes?` for a selected entity.
+10. Inspect the deterministic impact graph, explanation, and supporting evidence.
+
+The product UX iteration is successful when a developer who has never seen CardDemo can understand an important part of the system without manually reading dozens of COBOL and JCL files.
 
 ## Deployment Strategy
 
