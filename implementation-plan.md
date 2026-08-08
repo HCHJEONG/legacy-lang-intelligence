@@ -125,7 +125,7 @@ Result:
 
 ### 6. Define Normalized IR, Provenance, And Coverage Metrics
 
-Status: next.
+Status: complete.
 
 Design the internal analysis contract after the `cobol-intel` benchmark.
 
@@ -198,9 +198,16 @@ Coverage metrics should be first-class:
 
 The adapter boundary should ensure that UI, Ask AI, Mermaid, XYFlow, and SQLite do not depend on any one engine's native output shape.
 
+Result:
+
+- `src/lib/analysis/normalized-ir.ts` defines the Zod-validated Normalized IR.
+- `src/lib/analysis/baseline-adapter.ts` converts the TypeScript baseline analyzer output into Normalized IR.
+- `npm run ingest` writes `analysis-output/carddemo-normalized-ir.json`.
+- The first CardDemo normalized run produced 6124 entities, 8638 relations, 14762 evidence records, and 446 unresolved findings.
+
 ### 7. Measure CardDemo Baseline Coverage
 
-Status: pending.
+Status: next.
 
 Before adding SQLite, measure how well the current TypeScript baseline analyzer covers CardDemo.
 

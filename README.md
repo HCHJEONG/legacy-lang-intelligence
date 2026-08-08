@@ -45,6 +45,10 @@ The first implementation writes static analysis output to:
 
 `analysis-output/carddemo-analysis.json`
 
+It also writes the Normalized IR output to:
+
+`analysis-output/carddemo-normalized-ir.json`
+
 That output is also ignored by git because it is generated local analysis data.
 
 ## Current MVP Scope
