@@ -12,7 +12,10 @@ set -euo pipefail
 : "${MEDIUM_INSTANCE_ID:=i-0c66613ecf80dc3cb}"
 : "${CONFIGURE_ALB:=1}"
 
-if [ ! -f analysis-output/carddemo.sqlite ]; then
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+if [ ! -f "$ROOT_DIR/analysis-output/carddemo.sqlite" ]; then
   echo "analysis-output/carddemo.sqlite is required. Run the analysis/persistence steps before deploying."
   exit 1
 fi
@@ -20,7 +23,7 @@ fi
 IMAGE_NAME="legacy-lang-intelligence"
 IMAGE_TAG="$(date +%Y%m%d%H%M%S)"
 IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
-IMAGE_FILE="${IMAGE_NAME}-${IMAGE_TAG}.tar"
+IMAGE_FILE="$ROOT_DIR/${IMAGE_NAME}-${IMAGE_TAG}.tar"
 
 cleanup() { rm -f "$IMAGE_FILE"; }
 trap cleanup EXIT
@@ -42,7 +45,7 @@ if [ -n "$SSH_PROXY_JUMP" ]; then
 fi
 REMOTE_SERVER="$REMOTE_USER@$REMOTE_HOST"
 
-docker build -f Dockerfile.aws -t "$IMAGE" .
+docker build -f "$ROOT_DIR/Dockerfile.aws" -t "$IMAGE" "$ROOT_DIR"
 docker save "$IMAGE" > "$IMAGE_FILE"
 docker rmi "$IMAGE" >/dev/null 2>&1 || true
 
@@ -52,5 +55,5 @@ ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "set -eu; docker
 ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "docker ps --filter name=^/$CONTAINER_NAME$ --filter status=running"
 
 if [ "$CONFIGURE_ALB" = "1" ]; then
-  MEDIUM_INSTANCE_ID="$MEDIUM_INSTANCE_ID" bash "$(dirname "$0")/configure-aws-alb.sh"
+  MEDIUM_INSTANCE_ID="$MEDIUM_INSTANCE_ID" bash "$SCRIPT_DIR/configure-aws-alb.sh"
 fi
