@@ -526,6 +526,34 @@ Current result:
 - The fetch layer has been smoke-tested against a public GitHub repository and recorded its commit SHA and file manifest.
 - The public ingestion endpoint now completes fetch, analysis, Normalized IR creation, and SQLite persistence in one PoC request. Progress events/worker isolation and retention cleanup remain for the production hardening slice.
 
+### 16. Production Ingestion Hardening And Localization
+
+Status: in progress.
+
+Next operational work:
+
+- persist ingestion run state (`queued`, `fetching`, `analyzing`, `persisting`, `completed`, `failed`, `cancelled`);
+- return a run id immediately and move fetch/analysis into a worker;
+- add progress polling, timeout, cancellation, concurrency limits, duplicate commit reuse, and retention cleanup;
+- record source URL, commit SHA, manifest, errors, and timestamps independently from the analysis run;
+- test public, invalid, oversized, timeout, failed clone, and no-analyzable-file cases.
+
+Localization result:
+
+- `/en` is the default English route and `/ko` is the Korean route.
+- Both routes share the same server-rendered TSX and typed dictionary in `src/lib/i18n.ts`.
+- Language switching preserves search, selected entity, hop, node type, relation type, and confidence query state.
+- API routes remain locale-neutral under `/api`.
+
+Test plan after the current implementation:
+
+- unit tests for URL parsing, repository limits, confidence and status mapping;
+- integration tests for public GitHub fetch, commit pinning, analysis persistence, and API contact branches;
+- route smoke tests for `/en` and `/ko`, including query-state-preserving language switching;
+- UI tests for Analysis Quality, System Map filters, Ask AI fallback, and Source Evidence;
+- security tests proving repository code is never executed and symlinks/ignored directories are skipped;
+- production deployment test on the AWS private instance through the existing shell deployment path.
+
 ## Deployment Strategy
 
 Docker deployment is compatible with the adapter-first strategy and is recommended for reproducibility.

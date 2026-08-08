@@ -13,6 +13,7 @@ import { SystemMapFlow } from "@/components/system-map-flow";
 import { AskAiPanel } from "@/components/ask-ai-panel";
 import { RepositoryIngestionPanel } from "@/components/repository-ingestion-panel";
 import { getSystemMapViewModel } from "@/lib/db/analysis-queries";
+import { getLocale, messages, type Locale, type Messages } from "@/lib/i18n";
 
 type HomeProps = {
   searchParams?: Promise<{
@@ -21,12 +22,15 @@ type HomeProps = {
   hops?: string;
   entityType?: string;
   relationType?: string;
-  confidence?: "all" | "high" | "medium" | "low";
+    confidence?: "all" | "high" | "medium" | "low";
+    locale?: string;
   }>;
 };
 
 export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
+  const locale = getLocale(params?.locale);
+  const copy = messages[locale];
   const query = params?.q ?? "CBTRN02C";
   const entityId = params?.entity;
   const hopLimit = parseHopLimit(params?.hops);
@@ -42,6 +46,7 @@ export default async function Home({ searchParams }: HomeProps) {
             <h1 className="text-xl font-semibold">Legacy Language Intelligence</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <LanguageSwitch locale={locale} params={params} />
             <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-600">
               <Database className="size-3.5" />
               SQLite backed
@@ -58,15 +63,15 @@ export default async function Home({ searchParams }: HomeProps) {
         ) : (
           <div className="grid flex-1 gap-5 py-5 xl:grid-cols-[360px_1fr]">
             <aside className="space-y-5">
-              {viewModel.quality ? <AnalysisQuality quality={viewModel.quality} /> : null}
-              <EntitySearch query={query} results={viewModel.searchResults} selectedId={viewModel.graph?.selectedEntity?.id} filters={filters} />
+              {viewModel.quality ? <AnalysisQuality quality={viewModel.quality} copy={copy} /> : null}
+              <EntitySearch query={query} results={viewModel.searchResults} selectedId={viewModel.graph?.selectedEntity?.id} filters={filters} copy={copy} />
             </aside>
 
             <section className="space-y-5">
               <RepositoryIngestionPanel />
-              <SystemMapPanel graph={viewModel.graph} query={query} hopLimit={hopLimit} filters={filters} />
+              <SystemMapPanel graph={viewModel.graph} query={query} hopLimit={hopLimit} filters={filters} copy={copy} />
               <AskAiPanel />
-              <EvidencePanel graph={viewModel.graph} />
+              <EvidencePanel graph={viewModel.graph} copy={copy} />
             </section>
           </div>
         )}
@@ -89,7 +94,7 @@ function EmptyDatabaseState() {
   );
 }
 
-function AnalysisQuality({ quality }: { quality: NonNullable<ReturnType<typeof getSystemMapViewModel>["quality"]> }) {
+function AnalysisQuality({ quality, copy }: { quality: NonNullable<ReturnType<typeof getSystemMapViewModel>["quality"]>; copy: Messages }) {
   const confidenceTotal = Object.values(quality.confidenceDistribution).reduce((sum, count) => sum + count, 0);
   const highConfidence = quality.confidenceDistribution.high ?? 0;
   const confidenceScore = confidenceTotal === 0 ? 0 : highConfidence / confidenceTotal;
@@ -99,7 +104,7 @@ function AnalysisQuality({ quality }: { quality: NonNullable<ReturnType<typeof g
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <BarChart3 className="size-4 text-zinc-600" />
-          <h2 className="text-sm font-semibold">Analysis Quality</h2>
+          <h2 className="text-sm font-semibold">{copy.quality}</h2>
         </div>
         <span className="text-xs text-zinc-500">{formatTimestamp(quality.generatedAt)}</span>
       </div>
@@ -121,7 +126,7 @@ function AnalysisQuality({ quality }: { quality: NonNullable<ReturnType<typeof g
       <div className="mt-4 border-t border-zinc-200 pt-4">
         <div className="mb-2 flex items-center gap-2">
           <AlertTriangle className="size-4 text-zinc-500" />
-          <h3 className="text-xs font-semibold uppercase text-zinc-500">Known Unknowns</h3>
+          <h3 className="text-xs font-semibold uppercase text-zinc-500">{copy.knownUnknowns}</h3>
         </div>
         <div className="space-y-2">
           <MetricRow label="Unresolved findings" value={quality.unresolvedCount.toLocaleString()} />
@@ -134,8 +139,8 @@ function AnalysisQuality({ quality }: { quality: NonNullable<ReturnType<typeof g
 
       <div className="mt-4 border-t border-zinc-200 pt-4">
         <div className="mb-2 flex items-center justify-between text-xs font-semibold text-zinc-500">
-          <span>Overall confidence</span>
-          <span>{confidenceScore >= 0.65 ? "GOOD" : "PARTIAL"}</span>
+          <span>{copy.confidence}</span>
+          <span>{confidenceScore >= 0.65 ? copy.good : copy.partial}</span>
         </div>
         <div className="h-2 rounded-full bg-zinc-100">
           <div className="h-2 rounded-full bg-emerald-600" style={{ width: `${Math.round(confidenceScore * 100)}%` }} />
@@ -150,24 +155,26 @@ function EntitySearch({
   results,
   selectedId,
   filters,
+  copy,
 }: {
   query: string;
   results: ReturnType<typeof getSystemMapViewModel>["searchResults"];
   selectedId?: string;
   filters: { entityType?: string; relationType?: string; confidence?: string };
+  copy: Messages;
 }) {
   return (
     <section className="rounded-md border border-zinc-200 bg-white p-4">
       <div className="mb-3 flex items-center gap-2">
         <Search className="size-4 text-zinc-600" />
-        <h2 className="text-sm font-semibold">Search Entities</h2>
+        <h2 className="text-sm font-semibold">{copy.search}</h2>
       </div>
       <form className="mb-3 flex gap-2">
         <input
           name="q"
           defaultValue={query}
           className="h-8 min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2.5 text-sm outline-none focus:border-zinc-500"
-          placeholder="Program, copybook, dataset..."
+          placeholder={copy.searchPlaceholder}
         />
         <Button size="sm" variant="outline" type="submit">
           <Search className="size-3.5" />
@@ -176,11 +183,11 @@ function EntitySearch({
       </form>
       <div className="mb-3 grid grid-cols-2 gap-2">
         <select name="entityType" defaultValue={filters.entityType ?? "all"} className="h-8 rounded-md border border-zinc-300 bg-white px-2 text-xs">
-          <option value="all">All node types</option>
+          <option value="all">{copy.allNodes}</option>
           {['Program', 'Paragraph', 'Copybook', 'Field', 'Job', 'Step', 'Dataset', 'Transaction', 'Table'].map((type) => <option key={type} value={type}>{type}</option>)}
         </select>
         <select name="confidence" defaultValue={filters.confidence ?? "all"} className="h-8 rounded-md border border-zinc-300 bg-white px-2 text-xs">
-          <option value="all">All confidence</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+          <option value="all">{copy.allConfidence}</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
         </select>
       </div>
       <div className="space-y-2">
@@ -213,11 +220,13 @@ function SystemMapPanel({
   query,
   hopLimit,
   filters,
+  copy,
 }: {
   graph: ReturnType<typeof getSystemMapViewModel>["graph"];
   query: string;
   hopLimit: 1 | 2 | 3;
   filters: { entityType?: string; relationType?: string; confidence?: string };
+  copy: Messages;
 }) {
   return (
     <section className="rounded-md border border-zinc-200 bg-white">
@@ -225,8 +234,8 @@ function SystemMapPanel({
         <div className="flex items-center gap-2">
           <Network className="size-4 text-zinc-600" />
           <div>
-            <h2 className="text-sm font-semibold">System Map</h2>
-            <p className="text-xs text-zinc-500">Search &rarr; Entity &rarr; Neighborhood &rarr; Relation &rarr; Source</p>
+            <h2 className="text-sm font-semibold">{copy.map}</h2>
+            <p className="text-xs text-zinc-500">{copy.journey}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-1">
@@ -247,9 +256,9 @@ function SystemMapPanel({
             {graph?.selectedEntity ? <input type="hidden" name="entity" value={graph.selectedEntity.id} /> : null}
             <input type="hidden" name="hops" value={hopLimit} />
             <select name="relationType" defaultValue={filters.relationType ?? "all"} className="h-7 rounded-md border border-zinc-200 bg-white px-2 text-xs">
-              <option value="all">All relations</option><option value="CALLS">CALLS</option><option value="COPIES">COPIES</option><option value="EXECUTES">EXECUTES</option><option value="READS">READS</option><option value="WRITES">WRITES</option>
+              <option value="all">{copy.allRelations}</option><option value="CALLS">CALLS</option><option value="COPIES">COPIES</option><option value="EXECUTES">EXECUTES</option><option value="READS">READS</option><option value="WRITES">WRITES</option>
             </select>
-            <Button size="sm" variant="outline" type="submit">Filter</Button>
+            <Button size="sm" variant="outline" type="submit">{copy.filter}</Button>
           </form>
         </div>
       </div>
@@ -259,13 +268,13 @@ function SystemMapPanel({
             <span className="font-semibold text-zinc-950">{graph.selectedEntity.name}</span>
             <span>{graph.nodes.length} nodes</span>
             <span>{graph.edges.length} relations</span>
-            {graph.truncated ? <span className="text-red-600">truncated for readability</span> : null}
+            {graph.truncated ? <span className="text-red-600">{copy.truncated}</span> : null}
           </div>
           <div className="h-[520px]">
             <SystemMapFlow graph={graph} />
           </div>
           <div className="border-t border-zinc-200 p-4">
-            <p className="mb-2 text-xs font-semibold uppercase text-zinc-500">Follow relation</p>
+            <p className="mb-2 text-xs font-semibold uppercase text-zinc-500">{copy.follow}</p>
             <div className="flex flex-wrap gap-2">
               {graph.edges.slice(0, 12).map((edge) => {
                 const target = graph.nodes.find((node) => node.id === edge.target);
@@ -275,18 +284,18 @@ function SystemMapPanel({
           </div>
         </>
       ) : (
-        <div className="grid h-[520px] place-items-center text-sm text-zinc-500">Search and select an entity.</div>
+        <div className="grid h-[520px] place-items-center text-sm text-zinc-500">{copy.selectEntity}</div>
       )}
     </section>
   );
 }
 
-function EvidencePanel({ graph }: { graph: ReturnType<typeof getSystemMapViewModel>["graph"] }) {
+function EvidencePanel({ graph, copy }: { graph: ReturnType<typeof getSystemMapViewModel>["graph"]; copy: Messages }) {
   return (
     <section className="rounded-md border border-zinc-200 bg-white p-4">
       <div className="mb-3 flex items-center gap-2">
         <FileCode2 className="size-4 text-zinc-600" />
-        <h2 className="text-sm font-semibold">Source Evidence</h2>
+        <h2 className="text-sm font-semibold">{copy.evidence}</h2>
       </div>
       <div className="grid gap-2 lg:grid-cols-2">
         {graph?.evidence.length ? (
@@ -305,11 +314,21 @@ function EvidencePanel({ graph }: { graph: ReturnType<typeof getSystemMapViewMod
             </article>
           ))
         ) : (
-          <p className="text-sm text-zinc-500">Select an entity with verified relations to see source evidence.</p>
+          <p className="text-sm text-zinc-500">{copy.sourceHint}</p>
         )}
       </div>
     </section>
   );
+}
+
+function LanguageSwitch({ locale, params }: { locale: Locale; params?: Awaited<HomeProps["searchParams"]> }) {
+  const target = locale === "en" ? "ko" : "en";
+  const query = new URLSearchParams();
+  for (const key of ["q", "entity", "hops", "entityType", "relationType", "confidence"]) {
+    const value = params?.[key as keyof typeof params];
+    if (value) query.set(key, value);
+  }
+  return <a href={`/${target}${query.size ? `?${query.toString()}` : ""}`} className="inline-flex h-7 items-center rounded-md border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-600">{messages[locale].language}</a>;
 }
 
 function MetricRow({ label, value }: { label: string; value: string }) {

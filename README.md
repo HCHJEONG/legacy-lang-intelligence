@@ -102,6 +102,14 @@ The current implementation covers steps 1 through 14 of the plan:
 
 The next phase is public GitHub URL based ingestion with isolated repository handling.
 
+## Language Support
+
+English is the default at `/en`. Korean is available at `/ko`; switching language preserves the current search and System Map query state. Both locales share the same UI components and typed messages.
+
+## Ingestion Operations
+
+The current PoC fetches a public GitHub repository, pins the HEAD commit, creates an isolated shallow clone, runs the existing analysis pipeline, and persists the result. Production hardening will add asynchronous worker state, progress polling, cancellation, concurrency limits, and retention cleanup.
+
 ## Product UX Principle
 
 The System Map must be search-first, not full-graph-first.
