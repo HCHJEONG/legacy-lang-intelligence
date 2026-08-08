@@ -112,7 +112,7 @@ The current PoC fetches a public GitHub repository, pins the HEAD commit, create
 
 For the first AWS private-instance deployment, prefer `t3a.medium` if `t3a.small` is already hosting two containers. The application can share the medium during PoC with ingestion concurrency limited to one; move ingestion to a separate worker host when sustained analysis or memory pressure appears in CloudWatch.
 
-The AWS deployment should not depend on the existing lawvot nginx repository. The intended production shape is a dedicated `cobolai` container registered behind an AWS load-balancer target group and exposed at `cobolai.penvot.com`.
+The AWS deployment does not depend on the existing lawvot nginx repository or ECR. Run `scripts/deploy-aws.sh` manually from AWS CloudShell to build, save, copy, and load the Docker image over SSH. The container uses host port `3300` and container port `3000` to avoid collisions. Run `scripts/configure-aws-alb.sh` once to register the t3a.medium target behind the ALB at `cobolai.penvot.com`.
 
 ## Product UX Principle
 

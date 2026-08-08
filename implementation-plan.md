@@ -525,7 +525,7 @@ Current result:
 - `src/lib/ingestion/github-url.ts` and `src/lib/ingestion/limits.ts` define the accepted URL shape and safety limits.
 - The fetch layer has been smoke-tested against a public GitHub repository and recorded its commit SHA and file manifest.
 - The public ingestion endpoint now completes fetch, analysis, Normalized IR creation, and SQLite persistence in one PoC request. Progress events/worker isolation and retention cleanup remain for the production hardening slice.
-- AWS deployment preparation should remain independent of the existing lawvot nginx repository. The target architecture is a dedicated `cobolai` container behind an AWS load-balancer target group for `cobolai.penvot.com`.
+- AWS deployment preparation remains independent of the existing lawvot nginx repository and ECR. `scripts/deploy-aws.sh` uses manual Docker save/scp/load deployment with host port `3300`, and `scripts/configure-aws-alb.sh` connects a dedicated `cobolai` target group to `cobolai.penvot.com`.
 
 ### 16. Production Ingestion Hardening And Localization
 
