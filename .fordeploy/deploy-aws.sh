@@ -11,7 +11,7 @@ set -euo pipefail
 : "${CONTAINER_PORT:=3000}"
 : "${HOST_PORT:=3300}"
 : "${MEDIUM_INSTANCE_ID:=i-0c66613ecf80dc3cb}"
-: "${CONFIGURE_ALB:=1}"
+: "${CONFIGURE_ALB:=0}"
 : "${LEGACY_LANG_ENV_FILE_SOURCE:=/mnt/j/VSCodeProjects/legacy-lang-intelligence/.fordeploy/aws-backup/.env.local}"
 : "${LEGACY_LANG_GCP_KEY_SOURCE:=/mnt/j/VSCodeProjects/legacy-lang-intelligence/.fordeploy/aws-backup/gcp-key.json}"
 
@@ -79,6 +79,10 @@ IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 IMAGE_FILE="$ROOT_DIR/${IMAGE_NAME}-${IMAGE_TAG}.tar"
 IMAGE_BASENAME="$(basename "$IMAGE_FILE")"
 
+log() {
+  printf '[legacy-lang-intelligence] %s\n' "$*"
+}
+
 cleanup() {
   rm -f "$IMAGE_FILE"
   restore_env_local
@@ -99,12 +103,16 @@ SCP_OPTS=(-i "$BASTION_SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=a
 BASTION_TAR="/home/ubuntu/$IMAGE_BASENAME"
 PRIVATE_TAR="/home/ubuntu/$IMAGE_BASENAME"
 
+log "BUILD START: $IMAGE"
 docker build -f "$ROOT_DIR/Dockerfile.aws" -t "$IMAGE" "$ROOT_DIR"
+log "BUILD COMPLETE: $IMAGE"
 docker save "$IMAGE" > "$IMAGE_FILE"
 docker rmi "$IMAGE" >/dev/null 2>&1 || true
 
-echo "sending image to Bastion..."
+log "IMAGE ARCHIVE READY: $IMAGE_FILE"
+log "TRANSFERRING IMAGE TO BASTION: $BASTION_HOST"
 scp "${SCP_OPTS[@]}" "$IMAGE_FILE" "$BASTION_HOST:$BASTION_TAR"
+log "IMAGE ARRIVED AT BASTION"
 ssh "${SSH_OPTS[@]}" "$BASTION_HOST" \
   PRIVATE_HOST="$PRIVATE_HOST" \
   BASTION_TAR="$BASTION_TAR" \
@@ -116,6 +124,7 @@ ssh "${SSH_OPTS[@]}" "$BASTION_HOST" \
   CONTAINER_PORT="$CONTAINER_PORT" \
   bash -s <<'BASTION_SCRIPT'
 set -euo pipefail
+echo "[bastion] transferring image to private host: $PRIVATE_HOST"
 scp -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$BASTION_TAR" "$PRIVATE_HOST:$PRIVATE_TAR"
 ssh -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$PRIVATE_HOST" \
   BASTION_TAR="$BASTION_TAR" \
@@ -127,6 +136,7 @@ ssh -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$PRIVATE_H
   CONTAINER_PORT="$CONTAINER_PORT" \
   bash -s <<'PRIVATE_SCRIPT'
 set -euo pipefail
+echo "[private] loading image and replacing container: $CONTAINER_NAME"
 mkdir -p "$REMOTE_BASE_DIR/images"
 mv "$PRIVATE_TAR" "$REMOTE_BASE_DIR/images/"
 docker load -i "$REMOTE_BASE_DIR/images/$(basename "$PRIVATE_TAR")"
@@ -134,11 +144,32 @@ rm -f "$REMOTE_BASE_DIR/images/$(basename "$PRIVATE_TAR")"
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 docker run -d --restart unless-stopped --name "$CONTAINER_NAME" \
   -p "0.0.0.0:${HOST_PORT}:${CONTAINER_PORT}" "$IMAGE"
-docker ps --filter "name=^/$CONTAINER_NAME$" --filter status=running
+if ! docker ps --filter "name=^/$CONTAINER_NAME$" --filter status=running --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+  echo "[private] container did not enter running state" >&2
+  docker ps -a --filter "name=^/$CONTAINER_NAME$"
+  docker logs --tail 80 "$CONTAINER_NAME" || true
+  exit 1
+fi
+echo "[private] container is running"
+docker ps --filter "name=^/$CONTAINER_NAME$" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+if ! curl -fsS --max-time 10 "http://127.0.0.1:${HOST_PORT}/" >/dev/null; then
+  echo "[private] health check failed on http://127.0.0.1:${HOST_PORT}/" >&2
+  docker logs --tail 80 "$CONTAINER_NAME" || true
+  exit 1
+fi
+echo "[private] HTTP health check passed"
 PRIVATE_SCRIPT
 rm -f "$BASTION_TAR"
 BASTION_SCRIPT
+log "REMOTE DEPLOYMENT COMPLETE: $CONTAINER_NAME on $PRIVATE_HOST:$HOST_PORT"
 
 if [ "$CONFIGURE_ALB" = "1" ]; then
-  MEDIUM_INSTANCE_ID="$MEDIUM_INSTANCE_ID" bash "$SCRIPT_DIR/configure-aws-alb.sh"
+  if command -v aws >/dev/null 2>&1; then
+    log "CONFIGURING ALB TARGET AND RULES"
+    MEDIUM_INSTANCE_ID="$MEDIUM_INSTANCE_ID" bash "$SCRIPT_DIR/configure-aws-alb.sh"
+  else
+    log "WARNING: AWS CLI is not installed; skipping ALB configuration"
+    log "WARNING: configure the target group separately or rerun with AWS CLI available"
+  fi
 fi
+log "DEPLOY SUCCESS: https://cobolai.penvot.com"
