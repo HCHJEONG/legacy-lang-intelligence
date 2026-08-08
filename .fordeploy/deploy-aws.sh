@@ -152,8 +152,17 @@ if ! docker ps --filter "name=^/$CONTAINER_NAME$" --filter status=running --form
 fi
 echo "[private] container is running"
 docker ps --filter "name=^/$CONTAINER_NAME$" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
-if ! curl -fsS --max-time 10 "http://127.0.0.1:${HOST_PORT}/" >/dev/null; then
-  echo "[private] health check failed on http://127.0.0.1:${HOST_PORT}/" >&2
+health_ready=0
+for attempt in $(seq 1 30); do
+  if curl -fsS --max-time 5 "http://127.0.0.1:${HOST_PORT}/en" >/dev/null; then
+    health_ready=1
+    break
+  fi
+  echo "[private] waiting for HTTP health check ($attempt/30)"
+  sleep 2
+done
+if [ "$health_ready" -ne 1 ]; then
+  echo "[private] health check failed on http://127.0.0.1:${HOST_PORT}/en" >&2
   docker logs --tail 80 "$CONTAINER_NAME" || true
   exit 1
 fi
