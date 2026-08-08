@@ -11,6 +11,7 @@ The public remote repository for this project is expected to be:
 Implementation decisions should therefore prefer:
 
 - scriptable setup and deployment via `sh`-compatible scripts;
+- reproducible Docker deployment when it improves dependency control;
 - explicit environment variables instead of hidden local state;
 - reproducible installation, ingestion, build, and start commands;
 - server-side operation suitable for a private AWS instance;
@@ -28,6 +29,10 @@ The product principle is:
 
 `AI explains. Static analysis verifies. Source code proves.`
 
+The product differentiation is not owning every static-analysis primitive. It is the accessible web experience:
+
+`Open website -> paste GitHub URL or choose CardDemo -> analyze -> explore system visually -> Ask AI`
+
 ## Core Architecture Rule
 
 The LLM must not invent repository structure, dependencies, Mermaid diagrams, or graph relationships.
@@ -35,14 +40,26 @@ The LLM must not invent repository structure, dependencies, Mermaid diagrams, or
 The expected flow is:
 
 1. Repository/file discovery
-2. Deterministic static analysis
-3. Entity and dependency extraction
+2. Deterministic static analysis through an engine adapter
+3. Normalized entity, dependency, and evidence extraction
 4. SQLite persistence
 5. Graph query and source retrieval
 6. Gemini explanation
 7. UI rendering with text, evidence, and verified visualization
 
 Gemini may explain, summarize, name useful views, and provide business interpretation. Verified graph nodes and edges must come from static analysis and database queries.
+
+## Static Analysis Engine Strategy
+
+Do not assume the final COBOL analysis engine must be implemented from scratch in TypeScript.
+
+The current TypeScript analyzer is a baseline, smoke test, and fallback. Before expanding it, benchmark `cobol-intel` against CardDemo and decide whether to use it as the primary engine, an optional engine, or not at all.
+
+Prefer an adapter boundary:
+
+`cobol-intel / TypeScript fallback / future engines -> normalized analysis model -> SQLite -> UI and Ask AI`
+
+If `cobol-intel` is adopted, wrap it as a Python CLI/library/service from the Node app. Do not port the whole engine to Node unless benchmarking proves wrapping is not viable.
 
 ## Visualization Rule
 
@@ -60,6 +77,7 @@ Raw Mermaid generated directly by the LLM should not be trusted as factual graph
 - Prefer SQLite and Drizzle ORM for persisted analysis data.
 - Validate structured AI and visualization outputs with Zod.
 - Keep parser/static analysis code separate from AI code.
+- Keep engine-native output separate from the normalized analysis model.
 - Prefer deterministic graph traversal before any LLM explanation.
 - Avoid introducing vector search until structured graph retrieval proves insufficient.
 - Keep CardDemo source outside this repository unless a fixture strategy is explicitly documented.
@@ -83,12 +101,15 @@ Deployment scripts should live in a script directory, for example:
 
 Exact script names may evolve, but private AWS instance deployment must remain a first-class path.
 
+Docker support is compatible with the preferred architecture. For the PoC, a single container may include Next.js, Python, `cobol-intel`, SQLite, and analysis cache directories. Split into separate `web` and `analysis` containers later only if runtime behavior requires it.
+
 ## Review Checklist For Future Agents
 
 Before implementing major features, confirm:
 
 - the actual CardDemo repository structure;
 - available COBOL, Copybook, JCL, CICS, VSAM, DB2, and dataset artifacts;
+- `cobol-intel` package/repository license, APIs, output shape, dependencies, and CardDemo compatibility;
 - current official Gemini Flash model IDs and SDK recommendations;
 - current Next.js, React, Tailwind, Drizzle, Mermaid, and `@xyflow/react` APIs;
-- whether the implementation still supports script-based AWS private instance deployment.
+- whether the implementation still supports script-based AWS private instance deployment and Docker deployment.

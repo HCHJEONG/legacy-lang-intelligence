@@ -1,18 +1,38 @@
 # Implementation Plan
 
-## Feasibility Summary
+## Strategic Revision
 
-The MVP is feasible in this repository because the folder is currently empty and can be initialized as a new web application without migration constraints.
+The project should no longer assume that the core COBOL static-analysis engine must be built from scratch in TypeScript.
 
-The full original scope is large, so the first implementation should prioritize a thin but end-to-end path:
+New market and technical review found that `cobol-intel` appears to cover much of the static-analysis engine territory already: COBOL parsing, copybook resolution, call graphs, impact analysis, LLM explanation, and Mermaid-oriented output. The plan is therefore revised around an engine-adapter strategy:
 
-CardDemo source strategy -> discovery -> deterministic entity/dependency extraction -> SQLite persistence -> System Map -> Source Viewer -> Ask AI answer with evidence and verified visualization.
+`cobol-intel / fallback analyzer / future engines -> normalized analysis model -> SQLite -> System Map -> Ask AI -> Mermaid or XYFlow`
 
-## MVP Steps
+The product differentiation should be the accessible web experience:
+
+`Open website -> paste GitHub URL or choose CardDemo -> analyze -> explore system visually -> Ask AI`
+
+The current TypeScript analyzer remains useful, but primarily as a baseline, smoke test, fallback, and comparison target.
+
+## Current Project State
+
+Steps 1 through 4 are already implemented as a baseline:
+
+- Next.js 16 / React / TypeScript / Tailwind / shadcn/ui app scaffold
+- CardDemo clone/cache strategy through `.cache/carddemo` or `CARDDEMO_SOURCE_DIR`
+- file discovery and classification
+- minimal TypeScript static analyzer for COBOL, Copybook, and JCL
+- `npm run ingest` outputting `analysis-output/carddemo-analysis.json`
+
+The next major step is `cobol-intel` benchmark and integration planning.
+
+## Revised MVP Steps
 
 ### 1. Initialize The Web App
 
-Create a new TypeScript web app using the current stable Next.js and React stack.
+Status: complete.
+
+Create a TypeScript web app using the current stable Next.js and React stack.
 
 Initial requirements:
 
@@ -21,89 +41,130 @@ Initial requirements:
 - shadcn/ui-compatible structure
 - Lucide icons
 - basic app shell with System Map, Ask AI, and Source views
-- scripts suitable for local development and private AWS instance deployment
-
-Before implementation, verify current official package/API recommendations where version-sensitive.
+- scripts suitable for local development, private AWS instance deployment, and Docker deployment
 
 ### 2. Build CardDemo Fixture / Clone Strategy
 
+Status: complete.
+
 Do not blindly copy the full AWS CardDemo repository into this project.
 
-Implement a controlled ingestion source strategy:
+Use a controlled ingestion source strategy:
 
 - clone or fetch CardDemo into a cache/fixture location outside committed app code;
 - record upstream repository URL and license in project documentation;
 - allow the ingestion path to be configured by environment variable or CLI option;
 - support rerunning ingestion from a clean checkout.
 
-This should happen before finalizing the persistence schema, because the actual CardDemo directory structure and artifact types should shape the first database model.
-
 ### 3. Implement File Discovery And Classification
 
-Build `npm run ingest` around a script such as `scripts/ingest-carddemo.ts`.
+Status: complete.
 
-The script should:
+The ingestion script should:
 
 - walk the configured CardDemo source path;
 - classify files using path, extension, naming convention, and content hints;
 - identify COBOL, Copybook, JCL, documentation, data/config, and unknown files;
-- persist discovered files with checksums and source paths.
+- retain file checksums and source paths for later persistence.
 
 Classification should be conservative. Unknown files should be stored but not overinterpreted.
 
-### 4. Implement Minimal Static Analysis
+### 4. Implement Minimal Static Analysis Baseline
 
-Start with deterministic extraction instead of full compiler-grade parsing.
+Status: complete.
 
-COBOL extraction:
+The current TypeScript analyzer is a baseline and fallback, not the presumed final engine.
+
+It should remain able to extract:
 
 - `PROGRAM-ID`
-- divisions/sections/paragraphs where straightforward
 - `CALL`
 - `COPY`
 - `EXEC CICS`
 - `EXEC SQL`
-- file declarations and basic file operations where detectable
+- basic file declarations and file references
+- Copybook field hierarchy where safely detectable
+- JCL `JOB`, `EXEC`, `DD`, dataset references, and execution order
 
-Copybook extraction:
+Each extracted relationship should include source evidence and a confidence value.
 
-- copybook entity
-- field hierarchy where line structure is clear
-- basic `REDEFINES` and `OCCURS` metadata when safely detectable
+### 5. Benchmark `cobol-intel`
 
-JCL extraction:
+Status: next.
 
-- `JOB`
-- steps
-- `EXEC PGM`
-- `PROC`
-- `DD`
-- dataset references
-- execution order
+Before designing the final persistence schema, evaluate `cobol-intel` directly against CardDemo.
 
-Each extracted relationship must include source evidence and a confidence value.
+Questions to answer:
 
-### 5. Add Persistence And Schema
+- Can it analyze the CardDemo repository without manual source restructuring?
+- What commands, library APIs, or REST APIs are available?
+- Can it emit stable JSON or another machine-readable output?
+- Does it provide program, copybook, field, call graph, JCL, CFG, data-flow, impact, and source-location data?
+- Does it resolve copybooks better than the current baseline analyzer?
+- What evidence model does it expose for claims and dependencies?
+- How usable are its Mermaid outputs, and can they be converted to the shared graph model?
+- What dependencies are required, including Python, Java, ANTLR, model runtimes, and optional LLM providers?
+- Is the package and repository license actually MIT and compatible with this project?
+- How does performance look on CardDemo?
 
-Add SQLite with Drizzle ORM after the first pass of discovery and static analysis has clarified the actual CardDemo artifact types and extracted relationship shapes.
+Deliverable:
+
+- a short benchmark note in `docs/cobol-intel-benchmark.md`;
+- a captured sample output under an ignored local analysis path or a small committed redacted fixture if appropriate;
+- a recommendation: adopt as primary engine, use as optional engine, or reject.
+
+### 6. Define The Analysis Adapter And Normalized Schema
+
+Status: pending.
+
+Design the internal analysis contract after the `cobol-intel` benchmark.
+
+The schema should normalize multiple possible engines:
+
+- `cobol-intel`
+- current TypeScript fallback analyzer
+- future parser or commercial/OSS engines
+
+Core normalized concepts:
+
+- `Project`
+- `SourceFile`
+- `Entity`
+- `Dependency`
+- `SourceLocation`
+- `Evidence`
+- `AnalysisRun`
+- `AnalysisEngine`
+- `GraphVisualization`
+- `AiExplanation`
+
+The adapter boundary should ensure that UI, Ask AI, Mermaid, and XYFlow do not depend on any one engine's native output shape.
+
+### 7. Add SQLite Persistence
+
+Status: pending.
+
+Add SQLite with Drizzle ORM after the normalized analysis contract is defined.
 
 Minimum tables:
 
 - `projects`
+- `analysis_runs`
+- `analysis_engines`
 - `source_files`
 - `entities`
 - `dependencies`
 - `source_locations`
-- `analysis_runs`
+- `evidence`
 - `ai_explanations`
 
 Use JSON metadata columns where helpful, but keep entity and dependency types explicit enough for graph queries.
 
-The initial schema should be validated against both the real CardDemo source layout and the minimal static analysis output from steps 3 and 4.
+### 8. Persist Entities, Dependencies, And Evidence
 
-### 6. Persist Entities, Dependencies, And Evidence
+Status: pending.
 
-Normalize extracted analysis into entities and dependencies.
+Normalize extracted analysis into entities, dependencies, and evidence records.
 
 Initial entity types:
 
@@ -130,7 +191,9 @@ Initial dependency types:
 
 Do not create relationships that are not backed by static evidence.
 
-### 7. Build System Map And Source Viewer
+### 9. Build System Map And Source Viewer
+
+Status: pending.
 
 Use `@xyflow/react` for the System Map.
 
@@ -151,9 +214,11 @@ Build a lightweight read-only Source Viewer:
 - highlight selected lines;
 - link graph nodes and evidence references to source locations.
 
-### 8. Build Ask AI With Verified Visual Answers
+### 10. Build Ask AI With Verified Visual Answers
 
-Ask AI should route user questions through deterministic tools before calling Gemini.
+Status: pending.
+
+Ask AI should route user questions through deterministic graph/source tools before calling Gemini.
 
 Initial server-side tool/query layer:
 
@@ -179,19 +244,53 @@ Answer flow:
 6. ask Gemini to explain the verified result;
 7. render text, evidence, and either Mermaid or `@xyflow/react` graph.
 
-Visualization selection:
-
-- text only for short definitions;
-- Mermaid for compact flow or sequence explanations;
-- `@xyflow/react` for impact analysis and exploratory dependency graphs.
-
 The LLM must not generate factual graph edges. It may only explain verified graph data.
+
+### 11. Add GitHub URL Based Ingestion UX
+
+Status: pending.
+
+This is the major product differentiator.
+
+The user should be able to:
+
+- paste a public GitHub repository URL;
+- trigger analysis;
+- see progress and failures clearly;
+- inspect discovered COBOL/JCL/Copybook assets;
+- open the generated System Map;
+- ask AI about the unfamiliar codebase.
+
+Security and operational constraints:
+
+- never execute repository code;
+- enforce repository size and file count limits;
+- clone into isolated, ignored, or disposable workspace paths;
+- expose safe error messages;
+- record source URL and commit SHA for each analysis run.
+
+## Deployment Strategy
+
+Docker deployment is compatible with the adapter-first strategy and is recommended for reproducibility.
+
+Start with one container for the PoC:
+
+- Next.js app
+- Python runtime and virtual environment
+- optional `cobol-intel`
+- local SQLite database
+- analysis cache volume
+
+Split into `web` and `analysis` containers later if analysis becomes slow, stateful, or operationally noisy.
+
+Do not port `cobol-intel` wholesale to Node unless a later benchmark proves that CLI/API wrapping is not viable.
 
 ## Deferred Until After MVP
 
-- full COBOL grammar integration;
+- full TypeScript COBOL engine rewrite;
 - vector search;
 - broad business flow reconstruction;
 - Monaco Editor;
 - advanced AI tool calling if simple server-side routing is enough;
-- automatic DB2/VSAM inference beyond statically verified evidence.
+- automatic DB2/VSAM inference beyond statically verified evidence;
+- multi-container worker queue unless analysis latency requires it.
