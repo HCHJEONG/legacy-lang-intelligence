@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${REMOTE_HOST:?Set REMOTE_HOST to the AWS host or bastion address}"
+: "${REMOTE_HOST:=t3a}"
 : "${REMOTE_USER:=hchjeong}"
 : "${REMOTE_PORT:=22}"
 : "${REMOTE_BASE_DIR:=/home/${REMOTE_USER}/docker_images/legacy-lang-intelligence}"
@@ -9,6 +9,8 @@ set -euo pipefail
 : "${CONTAINER_PORT:=3000}"
 : "${HOST_PORT:=3300}"
 : "${SSH_PROXY_JUMP:=}"
+: "${MEDIUM_INSTANCE_ID:=i-0c66613ecf80dc3cb}"
+: "${CONFIGURE_ALB:=1}"
 
 if [ ! -f analysis-output/carddemo.sqlite ]; then
   echo "analysis-output/carddemo.sqlite is required. Run the analysis/persistence steps before deploying."
@@ -48,3 +50,7 @@ ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "mkdir -p '$REMO
 scp "${SCP_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$IMAGE_FILE" "$REMOTE_SERVER:$REMOTE_BASE_DIR/images/"
 ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "set -eu; docker load -i '$REMOTE_BASE_DIR/images/$IMAGE_FILE'; rm -f '$REMOTE_BASE_DIR/images/$IMAGE_FILE'; docker rm -f '$CONTAINER_NAME' >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name '$CONTAINER_NAME' -p 0.0.0.0:${HOST_PORT}:${CONTAINER_PORT} '$IMAGE'"
 ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "docker ps --filter name=^/$CONTAINER_NAME$ --filter status=running"
+
+if [ "$CONFIGURE_ALB" = "1" ]; then
+  MEDIUM_INSTANCE_ID="$MEDIUM_INSTANCE_ID" bash "$(dirname "$0")/configure-aws-alb.sh"
+fi
