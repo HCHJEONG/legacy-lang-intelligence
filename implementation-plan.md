@@ -207,7 +207,7 @@ Result:
 
 ### 7. Measure CardDemo Baseline Coverage
 
-Status: next.
+Status: complete.
 
 Before adding SQLite, measure how well the current TypeScript baseline analyzer covers CardDemo.
 
@@ -239,9 +239,17 @@ The goal is not to maximize strict parse success. The goal is to maximize useful
 
 After this report exists, improve the baseline analyzer by frequency: address the most common unsupported or unresolved constructs first.
 
+Result:
+
+- `src/lib/analysis/coverage-report.ts` builds coverage metrics from Normalized IR.
+- `scripts/report-carddemo-coverage.ts` writes coverage JSON and Markdown reports.
+- `npm run coverage` generates `analysis-output/carddemo-coverage-report.json` and `analysis-output/carddemo-coverage-report.md`.
+- First CardDemo baseline coverage: entity coverage 67.9%, relation coverage 65.8%, evidence coverage 100.0%, unresolved findings 446.
+- Highest-impact next improvements are external/system copybooks, dynamic CICS transaction handling, DB2 table entity creation, runtime/library call classification, JCL utility program classification, and dataset/file entity creation.
+
 ### 8. Add SQLite Persistence
 
-Status: pending.
+Status: next.
 
 Add SQLite with Drizzle ORM after the normalized analysis contract is defined.
 

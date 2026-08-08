@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "ingest": "tsx scripts/ingest-carddemo.ts"
+    "ingest": "tsx scripts/ingest-carddemo.ts",
+    "coverage": "tsx scripts/report-carddemo-coverage.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

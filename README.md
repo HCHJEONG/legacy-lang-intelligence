@@ -49,6 +49,17 @@ It also writes the Normalized IR output to:
 
 `analysis-output/carddemo-normalized-ir.json`
 
+To generate a baseline coverage report from the Normalized IR:
+
+```bash
+npm run coverage
+```
+
+This writes:
+
+- `analysis-output/carddemo-coverage-report.json`
+- `analysis-output/carddemo-coverage-report.md`
+
 That output is also ignored by git because it is generated local analysis data.
 
 ## Current MVP Scope
