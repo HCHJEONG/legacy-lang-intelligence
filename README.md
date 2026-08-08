@@ -114,6 +114,8 @@ For the first AWS private-instance deployment, prefer `t3a.medium` if `t3a.small
 
 The AWS deployment does not depend on the existing lawvot nginx repository or ECR. Run `.fordeploy/deploy-aws.sh` from the workstation that has the existing `t3a` SSH alias (the LawVot production path is WSL PEM -> Bastion -> `t3a`). The script builds, saves, copies, and loads the Docker image over SSH, then performs the ALB target-group, security-group, and host-rule setup automatically on the first deployment. The container uses host port `3300` and container port `3000` to avoid collisions. Set `REMOTE_HOST` or `SSH_PROXY_JUMP` only when the local SSH alias differs.
 
+Runtime environment values follow the LawVot pattern: keep secrets in the local `.env.local` file, do not bake them into `Dockerfile.aws`, and let the deployment script copy that file to the remote config directory and pass it to the container with `docker run --env-file`. Use `ENV_FILE=/path/to/file` to select another environment file.
+
 ## Product UX Principle
 
 The System Map must be search-first, not full-graph-first.

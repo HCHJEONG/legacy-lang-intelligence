@@ -11,6 +11,7 @@ set -euo pipefail
 : "${SSH_PROXY_JUMP:=}"
 : "${MEDIUM_INSTANCE_ID:=i-0c66613ecf80dc3cb}"
 : "${CONFIGURE_ALB:=1}"
+: "${ENV_FILE:=.env.local}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
@@ -44,14 +45,26 @@ if [ -n "$SSH_PROXY_JUMP" ]; then
   SCP_OPTS+=(-o "ProxyJump=$SSH_PROXY_JUMP")
 fi
 REMOTE_SERVER="$REMOTE_USER@$REMOTE_HOST"
+REMOTE_ENV_FILE="$REMOTE_BASE_DIR/config/.env.local"
+ENV_ARGS=()
+if [ -f "$ROOT_DIR/$ENV_FILE" ]; then
+  ENV_ARGS=(--env-file "$REMOTE_ENV_FILE")
+fi
 
 docker build -f "$ROOT_DIR/Dockerfile.aws" -t "$IMAGE" "$ROOT_DIR"
 docker save "$IMAGE" > "$IMAGE_FILE"
 docker rmi "$IMAGE" >/dev/null 2>&1 || true
 
-ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "mkdir -p '$REMOTE_BASE_DIR/images'"
+ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "mkdir -p '$REMOTE_BASE_DIR/images' '$REMOTE_BASE_DIR/config'"
 scp "${SCP_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$IMAGE_FILE" "$REMOTE_SERVER:$REMOTE_BASE_DIR/images/"
-ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "set -eu; docker load -i '$REMOTE_BASE_DIR/images/$IMAGE_FILE'; rm -f '$REMOTE_BASE_DIR/images/$IMAGE_FILE'; docker rm -f '$CONTAINER_NAME' >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name '$CONTAINER_NAME' -p 0.0.0.0:${HOST_PORT}:${CONTAINER_PORT} '$IMAGE'"
+if [ -f "$ROOT_DIR/$ENV_FILE" ]; then
+  scp "${SCP_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$ROOT_DIR/$ENV_FILE" "$REMOTE_SERVER:$REMOTE_ENV_FILE"
+fi
+ENV_ARGS_TEXT=""
+if [ "${#ENV_ARGS[@]}" -gt 0 ]; then
+  ENV_ARGS_TEXT="--env-file '$REMOTE_ENV_FILE'"
+fi
+ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "set -eu; docker load -i '$REMOTE_BASE_DIR/images/$IMAGE_FILE'; rm -f '$REMOTE_BASE_DIR/images/$IMAGE_FILE'; docker rm -f '$CONTAINER_NAME' >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name '$CONTAINER_NAME' $ENV_ARGS_TEXT -p 0.0.0.0:${HOST_PORT}:${CONTAINER_PORT} '$IMAGE'"
 ssh "${SSH_OPTS[@]}" "${SSH_IDENTITY_OPTS[@]}" "$REMOTE_SERVER" "docker ps --filter name=^/$CONTAINER_NAME$ --filter status=running"
 
 if [ "$CONFIGURE_ALB" = "1" ]; then
