@@ -20,6 +20,8 @@ export type AnalysisQualitySummary = {
   unsupportedCount: number;
   confidenceDistribution: Record<string, number>;
   unresolvedByCategory: Array<{ label: string; count: number }>;
+  analyzer: string;
+  analyzerVersion: string;
 };
 
 export type EntitySearchResult = {
@@ -55,6 +57,7 @@ export type NeighborhoodGraph = {
     startLine: number;
     endLine: number;
     snippet: string;
+    sourceLines: string[];
   }>;
   truncated: boolean;
 };
@@ -66,11 +69,27 @@ export type SystemMapViewModel = {
   graph: NeighborhoodGraph | null;
 };
 
+export type SystemMapFilters = {
+  entityType?: string;
+  relationType?: string;
+  confidence?: "all" | "high" | "medium" | "low";
+};
+
+export function getLatestAnalysisRun(databasePath = defaultDatabasePath) {
+  const { sqlite } = openAnalysisDatabase(databasePath);
+  try {
+    return sqlite.prepare(`SELECT id, generated_at AS generatedAt, coverage_json AS coverageJson FROM analysis_runs ORDER BY generated_at DESC LIMIT 1`).get() as { id: string; generatedAt: string; coverageJson: string } | undefined;
+  } finally {
+    sqlite.close();
+  }
+}
+
 export function getSystemMapViewModel(options: {
   query?: string;
   entityId?: string;
   databasePath?: string;
   hopLimit?: 1 | 2 | 3;
+  filters?: SystemMapFilters;
 }): SystemMapViewModel {
   const databasePath = options.databasePath ?? defaultDatabasePath;
   if (!fs.existsSync(/* turbopackIgnore: true */ databasePath)) {
@@ -110,7 +129,7 @@ export function getSystemMapViewModel(options: {
       quality: getQualitySummary(sqlite, run),
       searchResults,
       graph: selectedEntityId
-        ? getNeighborhoodGraph(sqlite, run.id, selectedEntityId, options.hopLimit ?? 1)
+        ? getNeighborhoodGraph(sqlite, run.id, selectedEntityId, options.hopLimit ?? 1, options.filters)
         : null,
     };
   } finally {
@@ -136,6 +155,7 @@ function getQualitySummary(
     confidenceDistribution?: Record<string, number>;
   };
 
+  const engine = sqlite.prepare(`SELECT name, version FROM analysis_engines ORDER BY id LIMIT 1`).get() as { name: string; version: string } | undefined;
   const unresolvedRows = sqlite
     .prepare(
       `SELECT category AS label, COUNT(*) AS count
@@ -161,6 +181,8 @@ function getQualitySummary(
     unsupportedCount: coverage.unsupportedCount ?? 0,
     confidenceDistribution: coverage.confidenceDistribution ?? {},
     unresolvedByCategory: unresolvedRows,
+    analyzer: engine?.name ?? "Unknown analyzer",
+    analyzerVersion: engine?.version ?? "unknown",
   };
 }
 
@@ -201,6 +223,7 @@ function getNeighborhoodGraph(
   runId: string,
   entityId: string,
   hopLimit: 1 | 2 | 3,
+  filters: SystemMapFilters = {},
 ): NeighborhoodGraph {
   const selectedEntity = getEntity(sqlite, runId, entityId);
   if (!selectedEntity) {
@@ -221,7 +244,7 @@ function getNeighborhoodGraph(
   for (let hop = 0; hop < hopLimit; hop += 1) {
     const nextFrontier = new Set<string>();
     for (const currentId of frontier) {
-      const relationRows = getRelationsForEntity(sqlite, runId, currentId);
+      const relationRows = getRelationsForEntity(sqlite, runId, currentId, filters);
       for (const relation of relationRows) {
         if (edges.size >= 80 || nodeIds.size >= 60) {
           truncated = true;
@@ -267,11 +290,15 @@ function getNeighborhoodGraph(
     };
   });
 
+  const visibleNodeIds = new Set(nodes.filter((node) => !filters.entityType || filters.entityType === "all" || node.type === filters.entityType || node.isSelected).map((node) => node.id));
+  const visibleNodes = nodes.filter((node) => visibleNodeIds.has(node.id));
+  const visibleEdges = [...edges.values()].filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target));
+
   return {
     selectedEntity,
-    nodes,
-    edges: [...edges.values()],
-    evidence: getEvidenceForRelations(sqlite, runId, [...edges.keys()].slice(0, 12)),
+    nodes: visibleNodes,
+    edges: visibleEdges,
+    evidence: getEvidenceForRelations(sqlite, runId, visibleEdges.map((edge) => edge.id).slice(0, 12)),
     truncated,
   };
 }
@@ -300,7 +327,18 @@ function getRelationsForEntity(
   sqlite: ReturnType<typeof openAnalysisDatabase>["sqlite"],
   runId: string,
   entityId: string,
+  filters: SystemMapFilters,
 ) {
+  const clauses = ["r.run_id = ?", "(r.source_entity_id = ? OR r.target_entity_id = ?)"];
+  const params: Array<string> = [runId, entityId, entityId];
+  if (filters.relationType && filters.relationType !== "all") {
+    clauses.push("r.type = ?");
+    params.push(filters.relationType);
+  }
+  if (filters.confidence && filters.confidence !== "all") {
+    clauses.push("p.confidence_band = ?");
+    params.push(filters.confidence);
+  }
   return sqlite
     .prepare(
       `SELECT
@@ -315,8 +353,7 @@ function getRelationsForEntity(
          ON p.run_id = r.run_id
         AND p.subject_type = 'relation'
         AND p.subject_id = r.id
-       WHERE r.run_id = ?
-         AND (r.source_entity_id = ? OR r.target_entity_id = ?)
+       WHERE ${clauses.join(" AND ")}
        ORDER BY
          CASE r.type
            WHEN 'CALLS' THEN 1
@@ -329,7 +366,7 @@ function getRelationsForEntity(
          r.target_name ASC
        LIMIT 40`,
     )
-    .all(runId, entityId, entityId) as Array<{
+    .all(...params) as Array<{
     id: string;
     type: string;
     sourceEntityId: string;
@@ -348,7 +385,7 @@ function getEvidenceForRelations(
     return [];
   }
   const placeholders = relationIds.map(() => "?").join(",");
-  return sqlite
+  const rows = sqlite
     .prepare(
       `SELECT
          p.subject_id AS relationId,
@@ -371,4 +408,14 @@ function getEvidenceForRelations(
        LIMIT 12`,
     )
     .all(runId, ...relationIds) as NeighborhoodGraph["evidence"];
+  return rows.map((row) => {
+    const sourceRoot = sqlite.prepare(`SELECT source_root AS sourceRoot FROM projects p JOIN analysis_runs r ON r.project_id = p.id WHERE r.id = ?`).get(runId) as { sourceRoot: string } | undefined;
+    const absolutePath = sourceRoot ? path.resolve(sourceRoot.sourceRoot, row.filePath) : null;
+    let sourceLines = row.snippet.split("\n");
+    if (absolutePath && fs.existsSync(absolutePath)) {
+      const lines = fs.readFileSync(absolutePath, "utf8").split(/\r?\n/);
+      sourceLines = lines.slice(Math.max(0, row.startLine - 1), row.endLine);
+    }
+    return { ...row, sourceLines };
+  });
 }

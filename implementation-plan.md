@@ -324,7 +324,7 @@ Result:
 
 ### 10. Persist Entities, Dependencies, Evidence, And Coverage
 
-Status: in progress.
+Status: complete.
 
 Normalize extracted analysis into entities, relations, evidence records, analyzer findings, and coverage reports.
 
@@ -363,7 +363,7 @@ Current result:
 
 ### 11. Build SQLite Query Layer
 
-Status: in progress.
+Status: complete.
 
 Build deterministic query functions over the persisted SQLite model before adding AI or broad visualization.
 
@@ -379,9 +379,15 @@ Initial query functions:
 
 The query layer is the product boundary between persistence and UI. System Map and Ask AI should both use these deterministic queries instead of reading raw database tables directly.
 
+Current result:
+
+- `src/lib/db/analysis-queries.ts` exposes the latest run, quality summary, entity search, neighborhood, relation evidence, and source-line lookup boundary.
+- Query options support bounded hop traversal plus node type, relation type, and confidence filters.
+- Source evidence is resolved from persisted source roots and original line ranges when the source file is available.
+
 ### 12. Build Analysis Quality Dashboard
 
-Status: in progress.
+Status: complete.
 
 Expose analysis confidence and known gaps to the user, not only to internal benchmarks.
 
@@ -400,9 +406,14 @@ The product voice should be:
 
 This is a trust feature. The UI should avoid implying perfect comprehension of an enterprise legacy system.
 
+Current result:
+
+- The dashboard shows file, entity, relation, and evidence coverage.
+- It shows unresolved findings by category, unsupported findings, confidence score, entity/relation/evidence counts, analyzer name/version, and run timestamp.
+
 ### 13. Build Search-First System Map And Source Viewer
 
-Status: in progress.
+Status: complete.
 
 Use `@xyflow/react` for the System Map.
 
@@ -435,6 +446,10 @@ Current result:
 - The first UI pass reads SQLite directly through `src/lib/db/analysis-queries.ts`.
 - The home screen now includes Analysis Quality, entity search, 1-hop/2-hop/3-hop neighborhood controls, an XYFlow System Map, and relation evidence snippets.
 - The graph intentionally defaults to a search result and bounded neighborhood instead of rendering all relations.
+- Node type, relation type, and confidence filters are available from the UI.
+- Relation follow links let users move from the selected entity to another verified target entity.
+- Source evidence displays original line numbers and source context when the configured source root is available; unavailable source files retain the persisted evidence snippet.
+- `npm run lint`, `npm run build`, and an HTTP smoke check against the running app pass.
 
 ### 14. Build Ask AI With Verified Visual Answers
 

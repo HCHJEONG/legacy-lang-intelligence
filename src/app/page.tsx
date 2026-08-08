@@ -14,9 +14,12 @@ import { getSystemMapViewModel } from "@/lib/db/analysis-queries";
 
 type HomeProps = {
   searchParams?: Promise<{
-    q?: string;
-    entity?: string;
-    hops?: string;
+  q?: string;
+  entity?: string;
+  hops?: string;
+  entityType?: string;
+  relationType?: string;
+  confidence?: "all" | "high" | "medium" | "low";
   }>;
 };
 
@@ -25,7 +28,8 @@ export default async function Home({ searchParams }: HomeProps) {
   const query = params?.q ?? "CBTRN02C";
   const entityId = params?.entity;
   const hopLimit = parseHopLimit(params?.hops);
-  const viewModel = getSystemMapViewModel({ query, entityId, hopLimit });
+  const filters = { entityType: params?.entityType, relationType: params?.relationType, confidence: params?.confidence ?? "all" } as const;
+  const viewModel = getSystemMapViewModel({ query, entityId, hopLimit, filters });
 
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
@@ -53,11 +57,11 @@ export default async function Home({ searchParams }: HomeProps) {
           <div className="grid flex-1 gap-5 py-5 xl:grid-cols-[360px_1fr]">
             <aside className="space-y-5">
               {viewModel.quality ? <AnalysisQuality quality={viewModel.quality} /> : null}
-              <EntitySearch query={query} results={viewModel.searchResults} selectedId={viewModel.graph?.selectedEntity?.id} />
+              <EntitySearch query={query} results={viewModel.searchResults} selectedId={viewModel.graph?.selectedEntity?.id} filters={filters} />
             </aside>
 
             <section className="space-y-5">
-              <SystemMapPanel graph={viewModel.graph} query={query} hopLimit={hopLimit} />
+              <SystemMapPanel graph={viewModel.graph} query={query} hopLimit={hopLimit} filters={filters} />
               <EvidencePanel graph={viewModel.graph} />
             </section>
           </div>
@@ -95,6 +99,7 @@ function AnalysisQuality({ quality }: { quality: NonNullable<ReturnType<typeof g
         </div>
         <span className="text-xs text-zinc-500">{formatTimestamp(quality.generatedAt)}</span>
       </div>
+      <p className="mt-3 text-xs text-zinc-500">{quality.analyzer} {quality.analyzerVersion}</p>
 
       <div className="space-y-3">
         <MetricRow label="Files with entities" value={`${quality.filesAnalyzed} / ${quality.filesTotal}`} />
@@ -140,10 +145,12 @@ function EntitySearch({
   query,
   results,
   selectedId,
+  filters,
 }: {
   query: string;
   results: ReturnType<typeof getSystemMapViewModel>["searchResults"];
   selectedId?: string;
+  filters: { entityType?: string; relationType?: string; confidence?: string };
 }) {
   return (
     <section className="rounded-md border border-zinc-200 bg-white p-4">
@@ -163,6 +170,15 @@ function EntitySearch({
           Search
         </Button>
       </form>
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <select name="entityType" defaultValue={filters.entityType ?? "all"} className="h-8 rounded-md border border-zinc-300 bg-white px-2 text-xs">
+          <option value="all">All node types</option>
+          {['Program', 'Paragraph', 'Copybook', 'Field', 'Job', 'Step', 'Dataset', 'Transaction', 'Table'].map((type) => <option key={type} value={type}>{type}</option>)}
+        </select>
+        <select name="confidence" defaultValue={filters.confidence ?? "all"} className="h-8 rounded-md border border-zinc-300 bg-white px-2 text-xs">
+          <option value="all">All confidence</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+        </select>
+      </div>
       <div className="space-y-2">
         {results.map((entity) => (
           <a
@@ -192,10 +208,12 @@ function SystemMapPanel({
   graph,
   query,
   hopLimit,
+  filters,
 }: {
   graph: ReturnType<typeof getSystemMapViewModel>["graph"];
   query: string;
   hopLimit: 1 | 2 | 3;
+  filters: { entityType?: string; relationType?: string; confidence?: string };
 }) {
   return (
     <section className="rounded-md border border-zinc-200 bg-white">
@@ -207,7 +225,7 @@ function SystemMapPanel({
             <p className="text-xs text-zinc-500">Search &rarr; Entity &rarr; Neighborhood &rarr; Relation &rarr; Source</p>
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {[1, 2, 3].map((hop) => (
             <a
               key={hop}
@@ -220,6 +238,15 @@ function SystemMapPanel({
               {hop}-hop
             </a>
           ))}
+          <form className="flex gap-1" method="get">
+            <input type="hidden" name="q" value={query} />
+            {graph?.selectedEntity ? <input type="hidden" name="entity" value={graph.selectedEntity.id} /> : null}
+            <input type="hidden" name="hops" value={hopLimit} />
+            <select name="relationType" defaultValue={filters.relationType ?? "all"} className="h-7 rounded-md border border-zinc-200 bg-white px-2 text-xs">
+              <option value="all">All relations</option><option value="CALLS">CALLS</option><option value="COPIES">COPIES</option><option value="EXECUTES">EXECUTES</option><option value="READS">READS</option><option value="WRITES">WRITES</option>
+            </select>
+            <Button size="sm" variant="outline" type="submit">Filter</Button>
+          </form>
         </div>
       </div>
       {graph?.selectedEntity ? (
@@ -232,6 +259,15 @@ function SystemMapPanel({
           </div>
           <div className="h-[520px]">
             <SystemMapFlow graph={graph} />
+          </div>
+          <div className="border-t border-zinc-200 p-4">
+            <p className="mb-2 text-xs font-semibold uppercase text-zinc-500">Follow relation</p>
+            <div className="flex flex-wrap gap-2">
+              {graph.edges.slice(0, 12).map((edge) => {
+                const target = graph.nodes.find((node) => node.id === edge.target);
+                return target && !target.id.startsWith("unresolved:") ? <a key={edge.id} href={`/?q=${encodeURIComponent(target.label)}&entity=${encodeURIComponent(target.id)}&hops=${hopLimit}`} className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50">{edge.label} → {target.label}</a> : null;
+              })}
+            </div>
           </div>
         </>
       ) : (
@@ -259,8 +295,8 @@ function EvidencePanel({ graph }: { graph: ReturnType<typeof getSystemMapViewMod
                 </span>
               </div>
               <p className="mb-2 truncate text-xs text-zinc-500">{item.filePath}</p>
-              <pre className="max-h-24 overflow-hidden whitespace-pre-wrap rounded bg-white p-2 text-xs leading-5 text-zinc-700">
-                {item.snippet}
+              <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-white p-2 text-xs leading-5 text-zinc-700">
+                {item.sourceLines.map((line, index) => `${item.startLine + index}  ${line}`).join("\n")}
               </pre>
             </article>
           ))
