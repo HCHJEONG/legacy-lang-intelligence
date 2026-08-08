@@ -518,9 +518,12 @@ Security and operational constraints:
 Current result:
 
 - The home screen now clearly separates `Public repo = Free`, `Private repo = Contact us`, and `Source cannot leave company = Contact us`.
-- `src/app/api/ingest/route.ts` validates public GitHub repository URLs and returns an explicit contact branch for private or source-restricted requests.
+- `src/app/api/ingest/route.ts` validates public GitHub repository URLs, fetches public repositories, and returns an explicit contact branch for private or source-restricted requests.
 - `src/components/repository-ingestion-panel.tsx` makes source handling and the no-code-execution policy visible before ingestion.
-- Actual isolated clone, commit pinning, analysis job progress, and persistence replacement remain the next implementation slice of this stage.
+- `src/lib/ingestion/github-fetcher.ts` resolves HEAD with `git ls-remote`, performs a depth-one detached clone, applies file/size limits, ignores `.git`, `node_modules`, and symbolic links, and returns a repository manifest.
+- `src/lib/ingestion/github-url.ts` and `src/lib/ingestion/limits.ts` define the accepted URL shape and safety limits.
+- The fetch layer has been smoke-tested against a public GitHub repository and recorded its commit SHA and file manifest.
+- Analysis pipeline execution, run progress, commit-pinned SQLite persistence, and cleanup policy remain the next implementation slice of this stage.
 
 ## Deployment Strategy
 
