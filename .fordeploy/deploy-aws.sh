@@ -60,6 +60,17 @@ if [ ! -f "$ROOT_DIR/analysis-output/carddemo.sqlite" ]; then
     npm run persist
   )
 fi
+if [ ! -d "$ROOT_DIR/.next" ]; then
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm is required to generate the Next.js production build" >&2
+    exit 1
+  fi
+  echo ".next is missing; generating the Next.js production build..."
+  (
+    cd "$ROOT_DIR"
+    npm run build
+  )
+fi
 if [ ! -f "$ROOT_DIR/.env.local" ]; then
   echo ".env.local is required for AWS deployment and is intentionally gitignored."
   exit 1
