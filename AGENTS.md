@@ -61,6 +61,32 @@ Prefer an adapter boundary:
 
 If `cobol-intel` is adopted, wrap it as a Python CLI/library/service from the Node app. Do not port the whole engine to Node unless benchmarking proves wrapping is not viable.
 
+## Normalized IR And Partial Analysis
+
+Normalized IR is the product center. UI, Ask AI, Mermaid, XYFlow, and SQLite should depend on normalized entities, relations, evidence, provenance, and coverage reports instead of analyzer-native output.
+
+This project is a legacy comprehension utility, not a COBOL compiler. Do not optimize for strict parse success at the expense of useful partial analysis.
+
+Prefer tolerant extraction:
+
+- extract what is statically knowable;
+- attach source evidence and source locations whenever possible;
+- mark unresolved, unsupported, dynamic, or low-confidence findings explicitly;
+- preserve analyzer id, analyzer version, extraction method, confidence, and confidence reason;
+- report coverage honestly instead of pretending analysis is complete.
+
+Primary benchmark metrics should be:
+
+- meaningful entities extracted;
+- meaningful relations extracted;
+- evidence coverage;
+- unresolved reference counts;
+- unsupported construct counts;
+- confidence distribution;
+- analyzer agreement and disagreement when multiple analyzers are used.
+
+When two analyzers agree on a relation, confidence may increase. When they disagree, lower confidence or mark the relation for review; do not silently hide the disagreement.
+
 ## Visualization Rule
 
 Use a unified graph visualization model as the source of truth for both Mermaid and `@xyflow/react`.
@@ -78,6 +104,7 @@ Raw Mermaid generated directly by the LLM should not be trusted as factual graph
 - Validate structured AI and visualization outputs with Zod.
 - Keep parser/static analysis code separate from AI code.
 - Keep engine-native output separate from the normalized analysis model.
+- Treat coverage reports as first-class artifacts.
 - Prefer deterministic graph traversal before any LLM explanation.
 - Avoid introducing vector search until structured graph retrieval proves insufficient.
 - Keep CardDemo source outside this repository unless a fixture strategy is explicitly documented.
@@ -110,6 +137,7 @@ Before implementing major features, confirm:
 - the actual CardDemo repository structure;
 - available COBOL, Copybook, JCL, CICS, VSAM, DB2, and dataset artifacts;
 - `cobol-intel` package/repository license, APIs, output shape, dependencies, and CardDemo compatibility;
+- whether current analyzer changes improve CardDemo entity, relation, evidence, unresolved, and unsupported-construct coverage;
 - current official Gemini Flash model IDs and SDK recommendations;
 - current Next.js, React, Tailwind, Drizzle, Mermaid, and `@xyflow/react` APIs;
 - whether the implementation still supports script-based AWS private instance deployment and Docker deployment.

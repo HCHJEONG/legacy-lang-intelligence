@@ -14,6 +14,12 @@ The product differentiation should be the accessible web experience:
 
 The current TypeScript analyzer remains useful, but primarily as a baseline, smoke test, fallback, and comparison target.
 
+The long-term compounding value is likely not "owning a compiler." It is tolerant ingestion:
+
+`messy real-world COBOL -> reliable Normalized IR with evidence, confidence, and coverage`
+
+This product is a legacy comprehension utility, not a COBOL compiler. Partial analysis is acceptable and should be reported honestly.
+
 ## Current Project State
 
 Steps 1 through 4 are already implemented as a baseline:
@@ -24,7 +30,7 @@ Steps 1 through 4 are already implemented as a baseline:
 - minimal TypeScript static analyzer for COBOL, Copybook, and JCL
 - `npm run ingest` outputting `analysis-output/carddemo-analysis.json`
 
-The next major step is `cobol-intel` benchmark and integration planning.
+The next major step is defining the Normalized IR, provenance model, and coverage metrics.
 
 ## Revised MVP Steps
 
@@ -117,34 +123,116 @@ Result:
 
 `cobol-intel==0.3.1` is installable and promising on simple COBOL, but it failed all CardDemo COBOL files tested. Treat it as an optional research/benchmark engine for now, not the primary engine. See `docs/cobol-intel-benchmark.md`.
 
-### 6. Define The Analysis Adapter And Normalized Schema
+### 6. Define Normalized IR, Provenance, And Coverage Metrics
 
 Status: next.
 
 Design the internal analysis contract after the `cobol-intel` benchmark.
 
-The schema should normalize multiple possible engines:
+Normalized IR is the center of the product. The UI, Ask AI, Mermaid, XYFlow, and persistence layers should depend on this IR, not on any analyzer's native output.
+
+The IR should normalize multiple possible engines:
 
 - `cobol-intel`
 - current TypeScript fallback analyzer
 - future parser or commercial/OSS engines
 
-Core normalized concepts:
+Minimum normalized concepts:
 
 - `Project`
 - `SourceFile`
-- `Entity`
-- `Dependency`
+- `NormalizedEntity`
+- `NormalizedRelation`
 - `SourceLocation`
 - `Evidence`
 - `AnalysisRun`
 - `AnalysisEngine`
+- `AnalyzerFinding`
+- `CoverageReport`
 - `GraphVisualization`
 - `AiExplanation`
 
-The adapter boundary should ensure that UI, Ask AI, Mermaid, and XYFlow do not depend on any one engine's native output shape.
+Minimum entity types:
 
-### 7. Add SQLite Persistence
+- `Program`
+- `Paragraph`
+- `Copybook`
+- `Field`
+- `Job`
+- `Step`
+- `Dataset`
+- `Transaction`
+- `Table`
+
+Minimum relation types:
+
+- `CALLS`
+- `COPIES`
+- `CONTAINS`
+- `EXECUTES`
+- `READS`
+- `WRITES`
+- `USES`
+- `INVOKES`
+
+Every relation should carry provenance:
+
+- analyzer id and version;
+- source location;
+- evidence snippet;
+- extraction rule or method;
+- confidence score;
+- confidence reason;
+- unresolved or unsupported status where applicable.
+
+Coverage metrics should be first-class:
+
+- file coverage;
+- entity coverage;
+- relation coverage;
+- evidence coverage;
+- unresolved copybook/call/dataset counts;
+- unsupported construct counts;
+- confidence distribution;
+- analyzer agreement/disagreement when more than one analyzer reports the same relation.
+
+The adapter boundary should ensure that UI, Ask AI, Mermaid, XYFlow, and SQLite do not depend on any one engine's native output shape.
+
+### 7. Measure CardDemo Baseline Coverage
+
+Status: pending.
+
+Before adding SQLite, measure how well the current TypeScript baseline analyzer covers CardDemo.
+
+The benchmark should answer:
+
+- How many files were discovered by kind?
+- How many files produced at least one meaningful entity?
+- How many files produced at least one meaningful relation?
+- Which entity and relation types were extracted?
+- What percentage of relations have source evidence?
+- Which COPY statements, CALL targets, JCL program references, datasets, fields, and CICS/SQL constructs remain unresolved?
+- Which unsupported or partially supported constructs appear most frequently?
+
+The output should be a generated coverage report, for example:
+
+```text
+Analysis coverage: 87%
+
+OK PROGRAM-ID
+OK 14 COPY relationships
+OK 7 CALL relationships
+OK 3 datasets
+WARN 2 unresolved dynamic calls
+WARN unsupported EXEC CICS construct
+WARN paragraph CFG incomplete
+```
+
+The goal is not to maximize strict parse success. The goal is to maximize useful, evidenced comprehension.
+
+After this report exists, improve the baseline analyzer by frequency: address the most common unsupported or unresolved constructs first.
+
+### 8. Add SQLite Persistence
 
 Status: pending.
 
@@ -160,19 +248,21 @@ Minimum tables:
 - `dependencies`
 - `source_locations`
 - `evidence`
+- `coverage_reports`
 - `ai_explanations`
 
 Use JSON metadata columns where helpful, but keep entity and dependency types explicit enough for graph queries.
 
-### 8. Persist Entities, Dependencies, And Evidence
+### 9. Persist Entities, Dependencies, Evidence, And Coverage
 
 Status: pending.
 
-Normalize extracted analysis into entities, dependencies, and evidence records.
+Normalize extracted analysis into entities, relations, evidence records, analyzer findings, and coverage reports.
 
 Initial entity types:
 
 - COBOL Program
+- Paragraph
 - Copybook
 - Field
 - JCL Job
@@ -184,18 +274,19 @@ Initial entity types:
 Initial dependency types:
 
 - `CALLS`
-- `INCLUDES_COPYBOOK`
-- `CONTAINS_FIELD`
+- `COPIES`
+- `CONTAINS`
 - `EXECUTES`
 - `READS`
 - `WRITES`
-- `USES_TABLE`
-- `USES_FILE`
-- `INVOKES_PROGRAM`
+- `USES`
+- `INVOKES`
 
 Do not create relationships that are not backed by static evidence.
 
-### 9. Build System Map And Source Viewer
+Analyzer disagreement should not be hidden. When multiple analyzers disagree, lower confidence or mark the finding for review instead of silently choosing one.
+
+### 10. Build System Map And Source Viewer
 
 Status: pending.
 
@@ -218,7 +309,7 @@ Build a lightweight read-only Source Viewer:
 - highlight selected lines;
 - link graph nodes and evidence references to source locations.
 
-### 10. Build Ask AI With Verified Visual Answers
+### 11. Build Ask AI With Verified Visual Answers
 
 Status: pending.
 
@@ -250,7 +341,7 @@ Answer flow:
 
 The LLM must not generate factual graph edges. It may only explain verified graph data.
 
-### 11. Add GitHub URL Based Ingestion UX
+### 12. Add GitHub URL Based Ingestion UX
 
 Status: pending.
 
