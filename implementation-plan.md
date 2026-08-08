@@ -525,6 +525,7 @@ Current result:
 - `src/lib/ingestion/github-url.ts` and `src/lib/ingestion/limits.ts` define the accepted URL shape and safety limits.
 - The fetch layer has been smoke-tested against a public GitHub repository and recorded its commit SHA and file manifest.
 - The public ingestion endpoint now completes fetch, analysis, Normalized IR creation, and SQLite persistence in one PoC request. Progress events/worker isolation and retention cleanup remain for the production hardening slice.
+- AWS deployment preparation now includes a `cobolai` Docker image/deploy script and nginx host routing for `cobolai.penvot.com`; the existing lawvot frontend host is named `physicalai.penvot.com` in the routing config.
 
 ### 16. Production Ingestion Hardening And Localization
 
