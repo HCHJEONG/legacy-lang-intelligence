@@ -31,7 +31,7 @@ export function RepositoryIngestionPanel() {
   }
 
   return (
-    <section className="rounded-md border border-zinc-200 bg-white p-4">
+    <section id="repository-ingestion" className="rounded-md border border-zinc-200 bg-white p-4">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2"><FolderGit2 className="size-4 text-zinc-600" /><div><h2 className="text-sm font-semibold">Analyze a repository</h2><p className="mt-1 text-xs text-zinc-500">Start with a public GitHub URL. Source boundaries are explicit.</p></div></div>
         <ShieldAlert className="size-4 text-zinc-500" />

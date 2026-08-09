@@ -13,8 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Legacy Language Intelligence",
-  description: "COBOL Intelligence PoC for static analysis, evidence, and AI explanations.",
+  title: "Understand COBOL Systems in Minutes | Legacy Language Intelligence",
+  description: "Explore AWS CardDemo with source-backed static analysis, verified system maps, and AI explanations grounded in evidence.",
+  openGraph: {
+    title: "Legacy Language Intelligence",
+    description: "Understand unfamiliar COBOL systems with verified static analysis and source evidence.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  ArrowRight,
   BarChart3,
   Database,
   FileCode2,
@@ -63,23 +64,79 @@ export default async function Home({ searchParams }: HomeProps) {
         {!viewModel.databaseReady ? (
           <EmptyDatabaseState />
         ) : (
-          <div className="grid flex-1 gap-5 py-5 xl:grid-cols-[360px_1fr]">
-            <aside className="space-y-5">
-              <ProjectSelector projects={viewModel.projects} selectedProjectId={projectId} />
-              {viewModel.quality ? <AnalysisQuality quality={viewModel.quality} copy={copy} /> : null}
-              <EntitySearch query={query} results={viewModel.searchResults} selectedId={viewModel.graph?.selectedEntity?.id} projectId={projectId} filters={filters} copy={copy} />
-            </aside>
+          <>
+            <ProductEntry projectId={projectId} />
+            <WorkspaceNav />
+            <div className="grid flex-1 gap-5 py-5 xl:grid-cols-[360px_1fr]">
+              <aside className="space-y-5">
+                <ProjectSelector projects={viewModel.projects} selectedProjectId={projectId} />
+                {viewModel.quality ? <AnalysisQuality quality={viewModel.quality} copy={copy} /> : null}
+                <EntitySearch query={query} results={viewModel.searchResults} selectedId={viewModel.graph?.selectedEntity?.id} projectId={projectId} filters={filters} copy={copy} />
+              </aside>
 
-            <section className="space-y-5">
-              <RepositoryIngestionPanel />
-              <SystemMapPanel graph={viewModel.graph} query={query} projectId={projectId} hopLimit={hopLimit} filters={filters} copy={copy} />
-              <AskAiPanel projectId={projectId} />
-              <EvidencePanel graph={viewModel.graph} copy={copy} />
-            </section>
-          </div>
+              <section className="space-y-5">
+                <AskAiPanel projectId={projectId} />
+                <SystemMapPanel graph={viewModel.graph} query={query} projectId={projectId} hopLimit={hopLimit} filters={filters} copy={copy} />
+                <EvidencePanel graph={viewModel.graph} copy={copy} />
+                <RepositoryIngestionPanel />
+              </section>
+            </div>
+          </>
         )}
       </div>
     </main>
+  );
+}
+
+function WorkspaceNav() {
+  const items = [
+    ["Ask AI", "#ask-ai"],
+    ["System Map", "#system-map"],
+    ["Source", "#source-evidence"],
+    ["Analysis Quality", "#analysis-quality"],
+  ] as const;
+  return (
+    <nav className="sticky top-0 z-10 -mx-5 border-b border-zinc-200 bg-zinc-50/95 px-5 py-2 backdrop-blur lg:-mx-7 lg:px-7">
+      <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto">
+        {items.map(([label, href]) => (
+          <a key={href} href={href} className="inline-flex h-8 shrink-0 items-center rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100">
+            {label}
+          </a>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+function ProductEntry({ projectId }: { projectId?: string }) {
+  return (
+    <section className="border-b border-zinc-200 py-6">
+      <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
+        <div>
+          <p className="text-sm font-medium text-zinc-500">AI explains. Static analysis verifies. Source code proves.</p>
+          <h2 className="mt-2 max-w-3xl text-3xl font-semibold tracking-normal text-zinc-950 md:text-4xl">Understand unfamiliar COBOL systems in minutes.</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">
+            Start with AWS CardDemo, a sample mainframe credit-card application with COBOL programs, JCL jobs, copybooks, batch processing, and transaction logic.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <a href="#ask-ai" className="inline-flex h-9 items-center gap-2 rounded-md bg-zinc-950 px-3 text-sm font-medium text-white hover:bg-zinc-800">
+              Explore CardDemo
+              <ArrowRight className="size-4" />
+            </a>
+            <a href="#repository-ingestion" className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+              Analyze GitHub Repository
+            </a>
+          </div>
+        </div>
+        <div className="grid gap-2 rounded-md border border-zinc-200 bg-white p-4 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-medium text-zinc-900">Default project</span>
+            <span className="text-xs text-zinc-500">{projectId ?? "carddemo"}</span>
+          </div>
+          <p className="text-zinc-600">Ask a plain-English question, inspect a verified map, then open the exact source evidence behind each relationship.</p>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -122,7 +179,7 @@ function AnalysisQuality({ quality, copy }: { quality: NonNullable<ReturnType<ty
   const confidenceScore = confidenceTotal === 0 ? 0 : highConfidence / confidenceTotal;
 
   return (
-    <section className="rounded-md border border-zinc-200 bg-white p-4">
+    <section id="analysis-quality" className="rounded-md border border-zinc-200 bg-white p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <BarChart3 className="size-4 text-zinc-600" />
@@ -259,7 +316,7 @@ function SystemMapPanel({
   copy: Messages;
 }) {
   return (
-    <section className="rounded-md border border-zinc-200 bg-white">
+    <section id="system-map" className="rounded-md border border-zinc-200 bg-white">
       <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
           <Network className="size-4 text-zinc-600" />
@@ -325,7 +382,7 @@ function SystemMapPanel({
 
 function EvidencePanel({ graph, copy }: { graph: ReturnType<typeof getSystemMapViewModel>["graph"]; copy: Messages }) {
   return (
-    <section className="rounded-md border border-zinc-200 bg-white p-4">
+    <section id="source-evidence" className="rounded-md border border-zinc-200 bg-white p-4">
       <div className="mb-3 flex items-center gap-2">
         <FileCode2 className="size-4 text-zinc-600" />
         <h2 className="text-sm font-semibold">{copy.evidence}</h2>

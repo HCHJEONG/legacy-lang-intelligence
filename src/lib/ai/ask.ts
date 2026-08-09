@@ -4,10 +4,13 @@ import { GoogleAuth } from "google-auth-library";
 export type AskResult = {
   answer: string;
   mode: "verified-fallback" | "gemini-verified";
+  intent: AskIntent | null;
   entity: { id: string; name: string; type: string } | null;
   relations: VerifiedRelationContext[];
   evidence: Array<{ filePath: string; startLine: number; endLine: number; snippet: string }>;
 };
+
+export type AskIntent = "system-overview" | "transaction-flow" | "batch-jobs";
 
 export type VerifiedRelationContext = {
   type: string;
@@ -19,22 +22,34 @@ export type VerifiedRelationContext = {
   confidence: string;
 };
 
-export async function answerQuestion(question: string, projectId?: string): Promise<AskResult> {
-  const query = extractEntityQuery(question);
+export async function answerQuestion(question: string, projectId?: string, rawIntent?: string): Promise<AskResult> {
+  const intent = parseIntent(rawIntent);
+  const query = getIntentQuery(intent) ?? extractEntityQuery(question);
   const view = getSystemMapViewModel({ query, projectId, hopLimit: 1 });
   const entity = view.graph?.selectedEntity ?? null;
   const relations = buildRelationContext(view.graph);
   const evidence = (view.graph?.evidence ?? []).map(({ filePath, startLine, endLine, snippet }) => ({ filePath, startLine, endLine, snippet }));
-  const context = { question, entity, relations, evidence, quality: view.quality };
+  const context = { question, intent, entity, relations, evidence, quality: view.quality };
 
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_CLOUD_PROJECT) {
     const answer = await askGemini(context);
     if (answer) {
-      return { answer, mode: "gemini-verified", entity, relations, evidence };
+      return { answer, mode: "gemini-verified", intent, entity, relations, evidence };
     }
   }
 
-  return { answer: buildVerifiedFallback(context), mode: "verified-fallback", entity, relations, evidence };
+  return { answer: buildVerifiedFallback(context), mode: "verified-fallback", intent, entity, relations, evidence };
+}
+
+function parseIntent(value?: string): AskIntent | null {
+  return value === "system-overview" || value === "transaction-flow" || value === "batch-jobs" ? value : null;
+}
+
+function getIntentQuery(intent: AskIntent | null) {
+  if (intent === "transaction-flow") return "CBTRN02C";
+  if (intent === "batch-jobs") return "J";
+  if (intent === "system-overview") return "CB";
+  return null;
 }
 
 function extractEntityQuery(question: string) {
@@ -90,18 +105,25 @@ async function askGemini(context: Record<string, unknown>) {
   return json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
 }
 
-function buildVerifiedFallback(context: { entity: { name: string; type: string } | null; relations: VerifiedRelationContext[]; evidence: Array<{ filePath: string; startLine: number; endLine: number }> }) {
-  if (!context.entity) return "검증된 분석 결과에서 질문과 일치하는 entity를 찾지 못했습니다. 다른 프로그램명, copybook명 또는 dataset명을 검색해 주세요.";
+function buildVerifiedFallback(context: { intent: AskIntent | null; entity: { name: string; type: string } | null; relations: VerifiedRelationContext[]; evidence: Array<{ filePath: string; startLine: number; endLine: number }> }) {
+  if (!context.entity) return "No matching entity was found in the verified analysis. Try a program, copybook, job, or dataset name from the analyzed repository.";
   const outgoing = context.relations.filter((relation) => relation.direction === "outgoing");
   const incoming = context.relations.filter((relation) => relation.direction === "incoming");
   const outgoingText = outgoing.length
     ? outgoing.slice(0, 6).map((relation) => `${relation.type} ${relation.target} (${relation.confidence})`).join(", ")
-    : "없음";
+    : "none";
   const incomingText = incoming.length
     ? incoming.slice(0, 6).map((relation) => `${relation.source} -> ${relation.type} (${relation.confidence})`).join(", ")
-    : "없음";
+    : "none";
   const evidenceText = context.evidence.length
     ? context.evidence.slice(0, 4).map((item) => `${item.filePath}:${item.startLine}-${item.endLine}`).join(", ")
-    : "확인된 source evidence가 없습니다";
-  return `${context.entity.type} ${context.entity.name} 기준으로 정적 분석이 확인한 outgoing 관계는 ${outgoingText}입니다. incoming 관계는 ${incomingText}입니다. 근거: ${evidenceText}. 이는 정적 분석으로 확인된 범위이며, 동적 호출이나 unresolved target은 포함되지 않을 수 있습니다.`;
+    : "no source evidence is available for the visible relations";
+  const prefix = context.intent ? `${formatIntent(context.intent)}: ` : "";
+  return `${prefix}For ${context.entity.type} ${context.entity.name}, static analysis verifies outgoing relations: ${outgoingText}. Incoming relations: ${incomingText}. Evidence: ${evidenceText}. This answer is limited to persisted static-analysis results; dynamic calls and unresolved targets may be missing.`;
+}
+
+function formatIntent(intent: AskIntent) {
+  if (intent === "system-overview") return "System overview";
+  if (intent === "transaction-flow") return "Transaction flow";
+  return "Major batch jobs";
 }
