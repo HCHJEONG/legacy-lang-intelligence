@@ -125,6 +125,42 @@ Result:
 
 `cobol-intel==0.3.1` is installable and promising on simple COBOL, but it failed all CardDemo COBOL files tested. Treat it as an optional research/benchmark engine for now, not the primary engine. See `docs/cobol-intel-benchmark.md`.
 
+#### Follow-Up Engine Benchmark: COBOL-REKT
+
+Status: planned.
+
+[COBOL-REKT](https://github.com/avishek-sen-gupta/cobol-rekt) is an MIT-licensed reverse-engineering toolkit designed to be embedded in custom analysis workflows rather than consumed only as a standalone UI. Its documented capabilities include an Eclipse Che4z-based parse tree, AST and control-flow models, JSON and GraphML export, Data Division structure extraction, data dependency relations, inter-program dependencies, and an AWS CardDemo execution path.
+
+Evaluate it as an additional engine-adapter candidate, not as an immediate replacement for the TypeScript fallback or as a reason to replace the product's Normalized IR.
+
+Benchmark questions:
+
+- Can a pinned COBOL-REKT commit build reproducibly in the local and Docker/AWS environments, including its Git submodules?
+- Can its CLI or Java API analyze the unmodified CardDemo source and copybooks with the correct dialect configuration?
+- Which CardDemo files parse successfully, partially, or fail, and why?
+- Can JSON, GraphML, or Java API output be consumed without deploying Neo4j?
+- Are identifiers and source locations stable enough to preserve evidence and compare repeated runs?
+- How well does it extract programs, sections, paragraphs, calls, copybooks, Data Division layouts, records, fields, `REDEFINES`, and inter-program dependencies?
+- How useful are its `ACCESSES`, `MODIFIES`, and `FLOWS_INTO`-style results for field-level lineage and impact analysis?
+- Does it expose or enable verified COBOL file operations, JCL DD/dataset resolution, VSAM organization, and embedded DB2 table access, or are separate adapters still required?
+- What are the runtime, memory, build-time, Java, Graphviz, and optional service dependencies for the subset of capabilities this product needs?
+- Which features require Neo4j, Azure OpenAI, interpretation, or dynamic execution and should remain outside the static-ingestion path?
+- How do its normalized results agree or disagree with the TypeScript fallback and `cobol-intel` on entities, relations, evidence, and unresolved findings?
+
+Benchmark deliverables:
+
+- `docs/cobol-rekt-benchmark.md` with the pinned repository commit, license verification, build steps, selected modules/tasks, and reproducible CardDemo commands;
+- captured machine-readable sample output under an ignored analysis path, plus a small redacted fixture only when needed for automated adapter tests;
+- a mapping table from COBOL-REKT concepts and relations to the product's Normalized IR;
+- CardDemo comparison metrics for parse coverage, meaningful entities, meaningful relations, evidence coverage, data-layout coverage, field-lineage coverage, unresolved constructs, runtime, and memory;
+- a recommendation to adopt it as a primary engine, use it as a specialized data/control-flow engine, keep it optional, or reject it.
+
+Preferred integration if the benchmark succeeds:
+
+`COBOL-REKT Java CLI/library -> COBOL-REKT adapter -> Normalized IR -> SQLite -> deterministic queries -> UI and Ask AI`
+
+Start with the smallest useful, deterministic export surface. Do not ingest COBOL-REKT's Neo4j schema directly into the UI or replace SQLite merely because Neo4j-backed features exist. Do not enable its interpreter or LLM-assisted features in repository ingestion unless a later, separately scoped requirement justifies executing those modes.
+
 ### 6. Define Normalized IR, Provenance, And Coverage Metrics
 
 Status: complete.
@@ -136,6 +172,7 @@ Normalized IR is the center of the product. The UI, Ask AI, Mermaid, XYFlow, and
 The IR should normalize multiple possible engines:
 
 - `cobol-intel`
+- COBOL-REKT through a pinned Java CLI/library adapter if its CardDemo benchmark succeeds
 - current TypeScript fallback analyzer
 - future parser or commercial/OSS engines
 
@@ -712,6 +749,161 @@ Final acceptance journey:
 
 The product UX iteration is successful when a developer who has never seen CardDemo can understand an important part of the system without manually reading dozens of COBOL and JCL files.
 
+### 18. Strengthen The File And Database Data Layer
+
+Status: planned.
+
+Program-call and copybook dependency graphs are necessary but insufficient for modernization and fragmentation planning. COBOL systems are organized around persistent data streams, so the product must also explain which programs and jobs produce, mutate, and consume VSAM files, sequential datasets, and DB2 data, and how their record layouts are defined.
+
+The data-layer journey is:
+
+`Data asset -> producer/consumer flow -> record layout -> field usage -> change impact -> isolation boundary evidence`
+
+This is a first-class analysis and product workstream, not an LLM-only visualization feature. Data assets, access operations, layouts, and field relationships must be extracted into Normalized IR with provenance before they are displayed or explained.
+
+#### Normalized Data Asset Model
+
+Extend the normalized model only through the existing engine-adapter boundary. The minimum data-oriented entity model should represent:
+
+- VSAM datasets, with statically known organization such as KSDS, ESDS, or RRDS when available;
+- sequential files, partitioned datasets, and GDG references;
+- JCL DD statements and dataset references;
+- COBOL file definitions and file descriptors;
+- DB2 tables and views referenced by embedded SQL;
+- record layouts and records;
+- fields, including qualified names, hierarchy, level number, data type/PIC, usage, offset, and length when statically derivable;
+- copybooks that define or contribute to a file or database host-variable layout.
+
+Use explicit normalized relations where evidence supports them:
+
+- `READS`: a program, step, or utility consumes a dataset or table;
+- `WRITES`: a program, step, or utility creates or appends data;
+- `UPDATES`: an existing record or database row may be changed;
+- `DELETES`: a record or database row may be removed;
+- `OPENS`: a COBOL program opens a file with an observed mode;
+- `DEFINED_BY`: a data file or record uses a record layout or copybook definition;
+- `MAPS_TO`: a COBOL file definition or JCL DD resolves to a dataset when statically knowable;
+- `CONTAINS`: a layout contains records or fields and preserves their hierarchy;
+- `PASSED_TO`: a dataset produced by one job step is consumed by another when the JCL chain proves the connection.
+
+Each access relation must retain operation-level details where available, including access mode, source statement type, file/DD name, resolved physical dataset or table name, dynamic-name status, confidence, and evidence location. Do not collapse `READ`, `WRITE`, `REWRITE`, SQL `UPDATE`, and JCL dataset disposition into one ambiguous `USES` edge.
+
+#### Deterministic Extraction And Resolution
+
+Add tolerant, evidence-preserving extraction for:
+
+- COBOL `SELECT`, `ASSIGN`, `FD`, `SD`, `OPEN`, `READ`, `WRITE`, `REWRITE`, `DELETE`, `START`, and `CLOSE` statements;
+- `RECORD CONTAINS`, `RECORDING MODE`, `BLOCK CONTAINS`, record-name, and copybook-backed FD layouts;
+- JCL `DD`, `DSN`, `DISP`, temporary datasets, passed datasets, GDG references, and relevant utility steps;
+- embedded SQL `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, cursor declarations, and referenced table/view names;
+- host variables and copybook fields used at DB2 boundaries where the mapping is statically demonstrable;
+- program file-name to JCL DD-name to physical dataset resolution;
+- record-layout and field references while preserving original source line mappings through normalization.
+
+Resolution must distinguish:
+
+- `Verified`: the complete program/file/DD/dataset or program/SQL/table chain is statically supported;
+- `Partial`: an access operation is known but a physical dataset, layout, or field mapping is incomplete;
+- `Unresolved`: a dynamic name, missing copybook, external catalog, or unsupported construct prevents resolution.
+
+Dynamic dataset names, symbolic JCL parameters, alternate file definitions, utility-specific transformations, and DB2 aliases must remain explicit findings. Gemini must not fill these gaps with invented mappings.
+
+#### Data Query Layer
+
+Add bounded deterministic queries over SQLite before adding data-oriented AI answers:
+
+- `getDataAssets` with type, status, and access filters;
+- `getDataAssetProducers` and `getDataAssetConsumers`;
+- `getProgramDataAccesses` and `getJobDataFlow`;
+- `getDatasetLifecycle` across ordered JCL steps and jobs;
+- `getRecordLayout` and `getFieldHierarchy`;
+- `getProgramsUsingLayout`, `getProgramsUsingField`, and `getProgramsUpdatingTable`;
+- `getDataImpactPaths` for upstream and downstream traversal;
+- `getCrossBoundaryReads` and `getCrossBoundaryWrites` for a proposed set of program or job groups;
+- `getUnresolvedDataBindings` grouped by reason and construct type.
+
+All queries must be project/run scoped, directionally correct, cycle safe, hop limited, and response limited. Field-level impact should traverse only relation types that are semantically valid for the requested question.
+
+#### Data-Centered Product Views
+
+Keep control flow and data flow available as distinct views so relation semantics remain readable:
+
+1. **Program Flow** shows program calls, copybook use, and job-step execution.
+2. **Data Flow** shows producer and consumer paths such as `Job/Program -> READS/WRITES/UPDATES -> Dataset/Table`.
+3. **Data Model** shows `Dataset/Table -> Record/Layout -> Field` hierarchy and the defining copybook or source structure.
+4. **Change Impact** shows verified upstream and downstream effects of changing a dataset, table, layout, or field.
+5. **Isolation Boundary** summarizes cross-boundary reads and writes for a proposed fragmentation candidate.
+
+The Data Flow view should default to one selected data asset and a bounded producer/consumer neighborhood. It must not render every data asset or access relation in the repository. The layout viewer should use a hierarchy or compact table rather than forcing thousands of fields into XYFlow.
+
+Suggested data-oriented questions should include:
+
+- `Which programs read and write this VSAM file?`
+- `Which jobs produce this dataset, and which jobs consume it?`
+- `Which copybook defines this file layout?`
+- `Which programs update this DB2 table?`
+- `Where is this field populated before it is persisted?`
+- `What breaks if this record layout changes?`
+- `Can this data domain be isolated without creating cross-boundary writes?`
+
+Question intents must select deterministic queries first. Gemini may explain access patterns, business meaning, fragmentation candidates, and trade-offs, but it must not create data assets, access operations, field mappings, or isolation edges.
+
+#### Delivery Alignment With The Three UX Stages
+
+During Stage 1:
+
+- benchmark a pinned COBOL-REKT commit against CardDemo before expanding the TypeScript analyzer for Data Division and field-lineage features it may already provide;
+- map any adopted COBOL-REKT output through the engine adapter into Normalized IR rather than exposing its native AST, graph, or Neo4j model to the product;
+- inventory the CardDemo data assets that are already statically observable;
+- expose verified/partial READ and WRITE relations in CardDemo orientation and suggested answers;
+- show at least one source-backed producer/consumer example without requiring users to know a dataset name;
+- report data-analysis coverage and unresolved data bindings honestly.
+
+During Stage 2:
+
+- add the bounded Data Flow neighborhood and record-layout viewer;
+- connect data edges and layout fields to Source Viewer evidence;
+- support field, layout, dataset, and table impact traversal;
+- expose grouped unresolved DD, dataset, layout, and table mappings;
+- add data-oriented contextual questions and verified visual answers.
+
+During Stage 3:
+
+- include discovered data-asset counts and data-access coverage in repository orientation;
+- include real file, JCL, copybook-resolution, and DB2 extraction phases in ingestion progress;
+- add producer/consumer and cross-boundary query support for user-ingested projects;
+- present isolation candidates as AI recommendations over verified access graphs, never as verified architecture facts;
+- validate performance and response limits on repositories with large field and dataset counts.
+
+#### Data Analysis Quality And Coverage
+
+Extend Analysis Quality with separate data-oriented measures:
+
+- data assets discovered by type;
+- COBOL file definitions resolved to JCL DD statements;
+- DD statements resolved to physical datasets;
+- record layouts resolved and fields structurally extracted;
+- data-access operations with source evidence;
+- DB2 statements with resolved table/view targets;
+- verified, partial, and unresolved data relations;
+- unresolved bindings grouped by missing copybook, dynamic dataset, symbolic JCL, external catalog, SQL ambiguity, and unsupported construct;
+- field-level evidence coverage and confidence distribution.
+
+Coverage must describe how much of the observable data surface was resolved. Confidence remains finding-specific. For example, repository-wide DD-to-dataset coverage may be partial while one `Program -> READS -> Dataset` relation is still verified with direct COBOL and JCL evidence.
+
+#### Data-Layer Completion Criteria
+
+- a user can select a VSAM file, sequential dataset, or DB2 table and see verified producers and consumers;
+- a user can trace a COBOL file access through its DD statement to a physical dataset when the repository contains sufficient evidence;
+- a user can inspect the defining record layout and field hierarchy with original source locations;
+- changing a dataset, layout, table, or field produces a bounded deterministic impact graph with evidence;
+- the product distinguishes reads from writes, updates, and deletes instead of presenting an undifferentiated dependency;
+- unresolved and dynamic bindings are aggregated but remain inspectable;
+- a proposed isolation boundary reports cross-boundary reads and writes derived from static relations;
+- any fragmentation recommendation is labeled as AI interpretation and cites the verified access graph and source evidence it relies on.
+
+This workstream is successful when the product can explain not only which programs depend on each other, but also how persistent business data moves through the system and which verified data couplings constrain a safe fragmentation strategy.
+
 ## Deployment Strategy
 
 Docker deployment is compatible with the adapter-first strategy and is recommended for reproducibility.
@@ -721,12 +913,13 @@ Start with one container for the PoC:
 - Next.js app
 - Python runtime and virtual environment
 - optional `cobol-intel`
+- optional Java runtime and pinned COBOL-REKT build only if the benchmark selects it
 - local SQLite database
 - analysis cache volume
 
 Split into `web` and `analysis` containers later if analysis becomes slow, stateful, or operationally noisy.
 
-Do not port `cobol-intel` wholesale to Node unless a later benchmark proves that CLI/API wrapping is not viable.
+Do not port `cobol-intel` or COBOL-REKT wholesale to Node unless a later benchmark proves that CLI/API wrapping is not viable. Do not add Neo4j to the deployment solely to consume COBOL-REKT; prefer its deterministic JSON, GraphML, or Java API surface and normalize that output into SQLite.
 
 ## Deferred Until After MVP
 
