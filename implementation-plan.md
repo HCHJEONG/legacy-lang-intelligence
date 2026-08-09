@@ -4,9 +4,9 @@
 
 The project should no longer assume that the core COBOL static-analysis engine must be built from scratch in TypeScript.
 
-New market and technical review found that `cobol-intel` appears to cover much of the static-analysis engine territory already: COBOL parsing, copybook resolution, call graphs, impact analysis, LLM explanation, and Mermaid-oriented output. The plan is therefore revised around an engine-adapter strategy:
+New market and technical review found that existing engines may cover parts of the static-analysis territory already. The plan is therefore revised around an engine-adapter strategy:
 
-`cobol-intel / fallback analyzer / future engines -> normalized analysis model -> SQLite -> System Map -> Ask AI -> Mermaid or XYFlow`
+`cobol-intel / COBOL-REKT / fallback analyzer / future engines -> normalized analysis model -> SQLite -> System Map -> Ask AI -> Mermaid or XYFlow`
 
 The product differentiation should be the accessible web experience:
 
@@ -21,6 +21,41 @@ The long-term compounding value is likely not "owning a compiler." It is toleran
 This product is a legacy comprehension utility, not a COBOL compiler. Partial analysis is acceptable and should be reported honestly.
 
 One part of that asset is a tolerant COBOL normalization layer that strips or classifies real-world header/noise constructs while preserving original source locations for evidence.
+
+## Product, Technical, And Business North Star
+
+The product should align three mutually reinforcing strategies.
+
+**Product:** Build a free, global, English-first COBOL comprehension utility that helps developers understand unfamiliar legacy systems without first knowing program, copybook, job, dataset, or table identifiers.
+
+**Technical:** Accept multiple analyzers through tolerant ingestion and engine adapters, normalize their verified and partial findings into a shared IR, and persist an evidence-backed graph. Product UI and Ask AI must depend on Normalized IR and deterministic queries rather than on any analyzer-native schema.
+
+**Business:** Offer public-repository analysis for free to validate real demand and encounter diverse, legitimate edge cases. Use the resulting aggregate product signals to improve ingestion and coverage, then validate willingness to pay for private-repository connectivity, local operation, private-cloud/VPC deployment, on-premise deployment, and enterprise support.
+
+The concise positioning is:
+
+> A free, evidence-backed COBOL comprehension utility that learns from public-repository usage patterns and validates demand for private deployment.
+
+The business validation funnel is:
+
+`Free public repository analysis -> real usage and aggregate edge cases -> better coverage and trust -> private/local/on-premise demand validation -> paid deployment and support`
+
+Free and paid editions should not intentionally differ in factual analysis quality. Paid value should come primarily from data isolation, private source connectivity, deployment control, governance, operational support, and organization-specific analyzer adapters.
+
+Default telemetry must never collect repository source text, source snippets, credentials, or private repository contents. Without explicit opt-in, collect only anonymous or aggregate signals such as analysis success/failure, discovered file counts, unsupported and unresolved construct categories, feature and Ask AI intent usage, graph usage, and analysis duration. Public availability of a repository does not remove the need for a documented cache, retention, deletion, and telemetry policy.
+
+Commercial hypotheses should be validated incrementally:
+
+- public GitHub repository analysis: free product and learning surface;
+- private repository SaaS connectivity: validate demand before implementation;
+- local CLI or desktop operation: validate willingness to pay for code-local analysis;
+- private AWS/VPC deployment: paid deployment and operational support candidate;
+- on-premise deployment: paid license, installation, updates, and support candidate;
+- enterprise offering: security review, governance, custom adapters, updates, and support.
+
+The north-star success question is:
+
+> Can developers obtain trustworthy understanding from public COBOL systems, and does that trust create demonstrated demand for the same experience where source code must remain private?
 
 ## Current Project State
 
