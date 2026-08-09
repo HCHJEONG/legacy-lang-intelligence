@@ -390,7 +390,7 @@ function EvidencePanel({ graph, copy }: { graph: ReturnType<typeof getSystemMapV
       <div className="grid gap-2 lg:grid-cols-2">
         {graph?.evidence.length ? (
           graph.evidence.map((item) => (
-            <article key={`${item.relationId}:${item.filePath}:${item.startLine}`} className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+            <article id={buildEvidenceId(item)} key={`${item.relationId}:${item.filePath}:${item.startLine}`} className="scroll-mt-24 rounded-md border border-zinc-200 bg-zinc-50 p-3 target:border-zinc-950 target:bg-white target:ring-2 target:ring-zinc-200">
               <div className="mb-2 flex items-center justify-between gap-2 text-xs">
                 <span className="font-semibold text-zinc-700">{item.relationType}</span>
                 <span className="text-zinc-500">
@@ -484,6 +484,10 @@ function buildSystemMapQuery({
   if (filters?.relationType && filters.relationType !== "all") params.set("relationType", filters.relationType);
   if (filters?.confidence && filters.confidence !== "all") params.set("confidence", filters.confidence);
   return params.toString();
+}
+
+function buildEvidenceId(item: { relationId: string; filePath: string; startLine: number }) {
+  return `evidence-${encodeURIComponent(`${item.relationId}:${item.filePath}:${item.startLine}`)}`;
 }
 
 function titleCase(value: string) {

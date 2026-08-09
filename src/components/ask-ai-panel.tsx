@@ -9,17 +9,20 @@ type AskResponse = {
   answer: string;
   mode: "verified-fallback" | "gemini-verified";
   intent: AskIntent | null;
-  entity: { name: string; type: string } | null;
+  entity: { id: string; name: string; type: string } | null;
   relations: Array<{
     type: string;
     direction: "outgoing" | "incoming";
+    sourceId: string;
+    targetId: string;
     source: string;
     target: string;
+    otherEntityId: string;
     otherEntity: string;
     status: string;
     confidence: string;
   }>;
-  evidence: Array<{ filePath: string; startLine: number; endLine: number }>;
+  evidence: Array<{ relationId: string; filePath: string; startLine: number; endLine: number }>;
 };
 
 type AskIntent = "system-overview" | "transaction-flow" | "batch-jobs";
@@ -93,18 +96,18 @@ export function AskAiPanel({ projectId }: { projectId?: string }) {
       {result ? <div className="mt-4 border-t border-zinc-200 pt-4">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500"><span className="font-semibold text-zinc-950">{result.entity ? `${result.entity.type} ${result.entity.name}` : "No matching entity"}</span><span>{result.mode === "gemini-verified" ? "Gemini explained verified context" : "Deterministic verified summary"}</span></div>
         <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-700">{result.answer}</p>
-        {result.relations.length ? <VerifiedFlow relations={result.relations} /> : null}
+        {result.relations.length ? <VerifiedFlow relations={result.relations} projectId={projectId} /> : null}
         <div className="mt-3 flex flex-wrap gap-2">
-          <a href="#system-map" className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"><Network className="size-3.5" /> Open System Map</a>
+          <a href={result.entity ? buildEntityHref(result.entity.name, result.entity.id, projectId) : "#system-map"} className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"><Network className="size-3.5" /> Open System Map</a>
           <a href="#source-evidence" className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"><FileCode2 className="size-3.5" /> Source Evidence</a>
         </div>
-        {result.evidence.length ? <div className="mt-3 flex flex-wrap gap-2">{result.evidence.slice(0, 6).map((item) => <a href="#source-evidence" key={`${item.filePath}:${item.startLine}`} className="rounded-md bg-zinc-50 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100">{item.filePath}:{item.startLine}-{item.endLine}</a>)}</div> : null}
+        {result.evidence.length ? <div className="mt-3 flex flex-wrap gap-2">{result.evidence.slice(0, 6).map((item) => <a href={`#${buildEvidenceId(item)}`} key={`${item.relationId}:${item.filePath}:${item.startLine}`} className="rounded-md bg-zinc-50 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100">{item.filePath}:{item.startLine}-{item.endLine}</a>)}</div> : null}
       </div> : null}
     </section>
   );
 }
 
-function VerifiedFlow({ relations }: { relations: AskResponse["relations"] }) {
+function VerifiedFlow({ relations, projectId }: { relations: AskResponse["relations"]; projectId?: string }) {
   return (
     <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
       <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-zinc-500">
@@ -119,9 +122,13 @@ function VerifiedFlow({ relations }: { relations: AskResponse["relations"] }) {
               <span className="text-zinc-500">{relation.direction}</span>
             </div>
             <div className="flex min-w-0 items-center gap-1 text-zinc-700">
-              <span className="truncate">{relation.source}</span>
+              <a href={buildEntityHref(relation.source, relation.sourceId, projectId)} className="truncate font-medium underline-offset-2 hover:underline">{relation.source}</a>
               <span className="shrink-0 text-zinc-400">-&gt;</span>
-              <span className="truncate">{relation.target}</span>
+              {relation.targetId.startsWith("unresolved:") ? (
+                <span className="truncate">{relation.target}</span>
+              ) : (
+                <a href={buildEntityHref(relation.target, relation.targetId, projectId)} className="truncate font-medium underline-offset-2 hover:underline">{relation.target}</a>
+              )}
             </div>
             <div className="mt-1 text-zinc-500">{relation.status} / {relation.confidence}</div>
           </div>
@@ -129,4 +136,16 @@ function VerifiedFlow({ relations }: { relations: AskResponse["relations"] }) {
       </div>
     </div>
   );
+}
+
+function buildEntityHref(label: string, entityId: string, projectId?: string) {
+  const params = new URLSearchParams();
+  if (projectId) params.set("project", projectId);
+  params.set("q", label);
+  params.set("entity", entityId);
+  return `/?${params.toString()}#system-map`;
+}
+
+function buildEvidenceId(item: { relationId: string; filePath: string; startLine: number }) {
+  return `evidence-${encodeURIComponent(`${item.relationId}:${item.filePath}:${item.startLine}`)}`;
 }

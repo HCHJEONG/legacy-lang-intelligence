@@ -31,8 +31,11 @@ test("builds direction-sensitive Ask AI relation context", () => {
     {
       type: "CALLS",
       direction: "outgoing",
+      sourceId: "A",
+      targetId: "B",
       source: "A",
       target: "B",
+      otherEntityId: "B",
       otherEntity: "B",
       status: "Verified",
       confidence: "high",
@@ -40,8 +43,11 @@ test("builds direction-sensitive Ask AI relation context", () => {
     {
       type: "CALLS",
       direction: "incoming",
+      sourceId: "C",
+      targetId: "A",
       source: "C",
       target: "A",
+      otherEntityId: "C",
       otherEntity: "C",
       status: "Verified",
       confidence: "high",

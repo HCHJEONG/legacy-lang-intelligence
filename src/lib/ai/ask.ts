@@ -7,7 +7,7 @@ export type AskResult = {
   intent: AskIntent | null;
   entity: { id: string; name: string; type: string } | null;
   relations: VerifiedRelationContext[];
-  evidence: Array<{ filePath: string; startLine: number; endLine: number; snippet: string }>;
+  evidence: Array<{ relationId: string; filePath: string; startLine: number; endLine: number; snippet: string }>;
 };
 
 export type AskIntent = "system-overview" | "transaction-flow" | "batch-jobs";
@@ -15,8 +15,11 @@ export type AskIntent = "system-overview" | "transaction-flow" | "batch-jobs";
 export type VerifiedRelationContext = {
   type: string;
   direction: "outgoing" | "incoming";
+  sourceId: string;
+  targetId: string;
   source: string;
   target: string;
+  otherEntityId: string;
   otherEntity: string;
   status: string;
   confidence: string;
@@ -28,7 +31,7 @@ export async function answerQuestion(question: string, projectId?: string, rawIn
   const view = getSystemMapViewModel({ query, projectId, hopLimit: 1 });
   const entity = view.graph?.selectedEntity ?? null;
   const relations = buildRelationContext(view.graph);
-  const evidence = (view.graph?.evidence ?? []).map(({ filePath, startLine, endLine, snippet }) => ({ filePath, startLine, endLine, snippet }));
+  const evidence = (view.graph?.evidence ?? []).map(({ relationId, filePath, startLine, endLine, snippet }) => ({ relationId, filePath, startLine, endLine, snippet }));
   const context = { question, intent, entity, relations, evidence, quality: view.quality };
 
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_CLOUD_PROJECT) {
@@ -68,8 +71,11 @@ export function buildRelationContext(graph: NeighborhoodGraph | null | undefined
     return {
       type: edge.label,
       direction,
+      sourceId: edge.source,
+      targetId: edge.target,
       source,
       target,
+      otherEntityId: direction === "outgoing" ? edge.target : edge.source,
       otherEntity: direction === "outgoing" ? target : source,
       status: edge.status,
       confidence: edge.confidenceBand,
