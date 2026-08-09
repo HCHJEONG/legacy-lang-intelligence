@@ -68,10 +68,12 @@ export function buildRelationContext(graph: NeighborhoodGraph | null | undefined
   if (!graph?.selectedEntity) return [];
   const selectedEntityId = graph.selectedEntity.id;
   const nodeNames = new Map(graph.nodes.map((node) => [node.id, node.label]));
+  const downstreamIds = collectReachableEntityIds(selectedEntityId, graph.edges, "outgoing");
+  const upstreamIds = collectReachableEntityIds(selectedEntityId, graph.edges, "incoming");
   return graph.edges.map((edge) => {
     const source = nodeNames.get(edge.source) ?? edge.source;
     const target = nodeNames.get(edge.target) ?? "Unresolved target";
-    const direction = edge.source === selectedEntityId ? "outgoing" : "incoming";
+    const direction = downstreamIds.has(edge.source) ? "outgoing" : upstreamIds.has(edge.target) ? "incoming" : edge.source === selectedEntityId ? "outgoing" : "incoming";
     return {
       type: edge.label,
       direction,
@@ -85,6 +87,29 @@ export function buildRelationContext(graph: NeighborhoodGraph | null | undefined
       confidence: edge.confidenceBand,
     };
   });
+}
+
+function collectReachableEntityIds(
+  selectedEntityId: string,
+  edges: NeighborhoodGraph["edges"],
+  direction: "outgoing" | "incoming",
+) {
+  const reachable = new Set([selectedEntityId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of edges) {
+      if (direction === "outgoing" && reachable.has(edge.source) && !edge.target.startsWith("unresolved:") && !reachable.has(edge.target)) {
+        reachable.add(edge.target);
+        changed = true;
+      }
+      if (direction === "incoming" && reachable.has(edge.target) && !reachable.has(edge.source)) {
+        reachable.add(edge.source);
+        changed = true;
+      }
+    }
+  }
+  return reachable;
 }
 
 async function askGemini(context: Record<string, unknown>) {

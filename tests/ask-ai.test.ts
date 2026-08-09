@@ -75,6 +75,7 @@ test("uses two-hop verified context for change-impact questions", async () => {
     const result = await answerQuestion("What happens if PROGA changes?", "carddemo", undefined, fixture.path);
     assert.equal(result.intent, "change-impact");
     assert.deepEqual(result.relations.map((relation) => `${relation.source}->${relation.target}`), ["PROGA->PROGB", "PROGB->PROGC"]);
+    assert.deepEqual(result.relations.map((relation) => relation.direction), ["outgoing", "outgoing"]);
   } finally {
     fixture.close();
   }

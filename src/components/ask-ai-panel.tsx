@@ -96,7 +96,7 @@ export function AskAiPanel({ projectId }: { projectId?: string }) {
       {result ? <div className="mt-4 border-t border-zinc-200 pt-4">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500"><span className="font-semibold text-zinc-950">{result.entity ? `${result.entity.type} ${result.entity.name}` : "No matching entity"}</span><span>{result.mode === "gemini-verified" ? "Gemini explained verified context" : "Deterministic verified summary"}</span></div>
         <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-700">{result.answer}</p>
-        {result.relations.length ? <VerifiedFlow relations={result.relations} projectId={projectId} /> : null}
+        {result.relations.length ? <VerifiedFlow relations={result.relations} projectId={projectId} intent={result.intent} /> : null}
         <div className="mt-3 flex flex-wrap gap-2">
           <a href={result.entity ? buildEntityHref(result.entity.name, result.entity.id, projectId) : "#system-map"} className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"><Network className="size-3.5" /> Open System Map</a>
           <a href="#source-evidence" className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"><FileCode2 className="size-3.5" /> Source Evidence</a>
@@ -117,19 +117,28 @@ export function AskAiPanel({ projectId }: { projectId?: string }) {
   );
 }
 
-function VerifiedFlow({ relations, projectId }: { relations: AskResponse["relations"]; projectId?: string }) {
+function VerifiedFlow({ relations, projectId, intent }: { relations: AskResponse["relations"]; projectId?: string; intent: AskIntent | null }) {
+  const isImpact = intent === "change-impact";
+  const downstream = relations.filter((relation) => relation.direction === "outgoing");
+  const upstream = relations.filter((relation) => relation.direction === "incoming");
   return (
     <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
       <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-zinc-500">
         <Network className="size-3.5" />
-        Verified Relationships
+        {isImpact ? "Impact Paths" : "Verified Relationships"}
       </div>
+      {isImpact ? (
+        <div className="mb-3 grid gap-2 text-xs md:grid-cols-2">
+          <div className="rounded-md bg-white px-2 py-1 text-zinc-600">Downstream candidates: <span className="font-semibold text-zinc-950">{downstream.length}</span></div>
+          <div className="rounded-md bg-white px-2 py-1 text-zinc-600">Upstream dependents: <span className="font-semibold text-zinc-950">{upstream.length}</span></div>
+        </div>
+      ) : null}
       <div className="grid gap-2 md:grid-cols-2">
-        {relations.slice(0, 8).map((relation, index) => (
+        {(isImpact ? [...downstream, ...upstream] : relations).slice(0, isImpact ? 12 : 8).map((relation, index) => (
           <div key={`${relation.source}:${relation.type}:${relation.target}:${index}`} className="min-w-0 rounded-md border border-zinc-200 bg-white p-2 text-xs">
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="font-semibold text-zinc-700">{relation.type}</span>
-              <span className="text-zinc-500">{relation.direction}</span>
+              <span className="text-zinc-500">{isImpact ? relation.direction === "outgoing" ? "downstream" : "upstream" : relation.direction}</span>
             </div>
             <div className="flex min-w-0 items-center gap-1 text-zinc-700">
               <a href={buildEntityHref(relation.source, relation.sourceId, projectId)} className="truncate font-medium underline-offset-2 hover:underline">{relation.source}</a>
