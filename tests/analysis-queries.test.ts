@@ -106,6 +106,25 @@ test("applies relation and confidence filters to neighborhood relations", () => 
   }
 });
 
+test("returns relation endpoints with source evidence", () => {
+  const fixture = createFixture();
+  try {
+    fixture.db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?)").run("carddemo", "AWS CardDemo", "/carddemo", "2026-01-01T00:00:00Z");
+    insertRun(fixture.db, "run", "carddemo", "2026-01-01T00:00:00Z", 2);
+    insertEntity(fixture.db, "A", "run", "PROGA");
+    insertEntity(fixture.db, "B", "run", "PROGB");
+    insertRelation(fixture.db, "a-to-b", "run", "CALLS", "A", "B", "high", ["ev-a-to-b"]);
+    fixture.db.prepare("INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run("ev-a-to-b", "run", "PROGA.cbl", 10, 10, "CALL 'PROGB'", "test", "fixture");
+
+    const view = getSystemMapViewModel({ databasePath: fixture.path, projectId: "carddemo", query: "PROGA", entityId: "A" });
+    assert.equal(view.graph?.evidence[0]?.sourceEntityName, "PROGA");
+    assert.equal(view.graph?.evidence[0]?.targetEntityName, "PROGB");
+    assert.equal(view.graph?.evidence[0]?.targetEntityId, "B");
+  } finally {
+    fixture.close();
+  }
+});
+
 function createFixture() {
   const directory = mkdtempSync(path.join(tmpdir(), "legacy-analysis-"));
   const databasePath = path.join(directory, "analysis.sqlite");
@@ -138,6 +157,7 @@ function insertRelation(
   sourceEntityId: string,
   targetEntityId: string,
   confidenceBand = "high",
+  evidenceIds: string[] = [],
 ) {
   db.prepare("INSERT INTO relations VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, runId, type, sourceEntityId, targetEntityId, targetEntityId, "{}");
   db.prepare("INSERT INTO provenance VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
@@ -152,6 +172,6 @@ function insertRelation(
     confidenceBand,
     "fixture",
     "Verified",
-    "[]",
+    JSON.stringify(evidenceIds),
   );
 }

@@ -77,7 +77,7 @@ export default async function Home({ searchParams }: HomeProps) {
               <section className="space-y-5">
                 <AskAiPanel projectId={projectId} />
                 <SystemMapPanel graph={viewModel.graph} query={query} projectId={projectId} hopLimit={hopLimit} filters={filters} copy={copy} />
-                <EvidencePanel graph={viewModel.graph} copy={copy} />
+                <EvidencePanel graph={viewModel.graph} projectId={projectId} copy={copy} />
                 <RepositoryIngestionPanel />
               </section>
             </div>
@@ -380,7 +380,7 @@ function SystemMapPanel({
   );
 }
 
-function EvidencePanel({ graph, copy }: { graph: ReturnType<typeof getSystemMapViewModel>["graph"]; copy: Messages }) {
+function EvidencePanel({ graph, projectId, copy }: { graph: ReturnType<typeof getSystemMapViewModel>["graph"]; projectId?: string; copy: Messages }) {
   return (
     <section id="source-evidence" className="rounded-md border border-zinc-200 bg-white p-4">
       <div className="mb-3 flex items-center gap-2">
@@ -396,6 +396,15 @@ function EvidencePanel({ graph, copy }: { graph: ReturnType<typeof getSystemMapV
                 <span className="text-zinc-500">
                   {item.startLine}-{item.endLine}
                 </span>
+              </div>
+              <div className="mb-2 flex min-w-0 items-center gap-1 text-xs text-zinc-700">
+                <a href={`/?${buildSystemMapQuery({ query: item.sourceEntityName, projectId, entityId: item.sourceEntityId })}#system-map`} className="truncate font-medium underline-offset-2 hover:underline">{item.sourceEntityName}</a>
+                <span className="shrink-0 text-zinc-400">-&gt;</span>
+                {item.targetEntityId ? (
+                  <a href={`/?${buildSystemMapQuery({ query: item.targetEntityName, projectId, entityId: item.targetEntityId })}#system-map`} className="truncate font-medium underline-offset-2 hover:underline">{item.targetEntityName}</a>
+                ) : (
+                  <span className="truncate">{item.targetEntityName}</span>
+                )}
               </div>
               <p className="mb-2 truncate text-xs text-zinc-500">{item.filePath}</p>
               <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-white p-2 text-xs leading-5 text-zinc-700">

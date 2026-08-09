@@ -58,6 +58,10 @@ export type NeighborhoodGraph = {
     endLine: number;
     snippet: string;
     sourceLines: string[];
+    sourceEntityId: string;
+    sourceEntityName: string;
+    targetEntityId: string | null;
+    targetEntityName: string;
   }>;
   truncated: boolean;
 };
@@ -448,11 +452,21 @@ function getEvidenceForRelations(
          ev.file_path AS filePath,
          ev.start_line AS startLine,
          ev.end_line AS endLine,
-         ev.snippet AS snippet
+         ev.snippet AS snippet,
+         r.source_entity_id AS sourceEntityId,
+         source.name AS sourceEntityName,
+         r.target_entity_id AS targetEntityId,
+         COALESCE(target.name, r.target_name) AS targetEntityName
        FROM provenance p
        JOIN relations r
          ON r.run_id = p.run_id
         AND r.id = p.subject_id
+       JOIN entities source
+         ON source.run_id = r.run_id
+        AND source.id = r.source_entity_id
+       LEFT JOIN entities target
+         ON target.run_id = r.run_id
+        AND target.id = r.target_entity_id
        JOIN evidence ev
          ON ev.run_id = p.run_id
         AND instr(p.evidence_ids_json, '"' || ev.id || '"') > 0
