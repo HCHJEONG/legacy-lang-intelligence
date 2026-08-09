@@ -99,6 +99,9 @@ export function AskAiPanel({ projectId }: { projectId?: string }) {
         {result.relations.length ? <VerifiedFlow relations={result.relations} projectId={projectId} intent={result.intent} /> : null}
         <div className="mt-3 flex flex-wrap gap-2">
           <a href={result.entity ? buildEntityHref(result.entity.name, result.entity.id, projectId) : "#system-map"} className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"><Network className="size-3.5" /> Open System Map</a>
+          {result.intent === "change-impact" && result.entity ? (
+            <a href={buildEntityHref(result.entity.name, result.entity.id, projectId, 2, "impact")} className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"><Network className="size-3.5" /> Open Impact Graph</a>
+          ) : null}
           <a href="#source-evidence" className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"><FileCode2 className="size-3.5" /> Source Evidence</a>
           {result.entity ? (
             <button
@@ -157,11 +160,13 @@ function VerifiedFlow({ relations, projectId, intent }: { relations: AskResponse
   );
 }
 
-function buildEntityHref(label: string, entityId: string, projectId?: string) {
+function buildEntityHref(label: string, entityId: string, projectId?: string, hops?: 1 | 2 | 3, view?: string) {
   const params = new URLSearchParams();
   if (projectId) params.set("project", projectId);
   params.set("q", label);
   params.set("entity", entityId);
+  if (hops) params.set("hops", String(hops));
+  if (view) params.set("view", view);
   return `/?${params.toString()}#system-map`;
 }
 
