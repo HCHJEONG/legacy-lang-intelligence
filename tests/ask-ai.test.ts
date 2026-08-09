@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 
-import { buildRelationContext } from "../src/lib/ai/ask";
+import Database from "better-sqlite3";
+
+import { answerQuestion, buildRelationContext } from "../src/lib/ai/ask";
+import { bootstrapAnalysisDatabase } from "../src/lib/db/bootstrap";
 import type { NeighborhoodGraph } from "../src/lib/db/analysis-queries";
 
 test("builds direction-sensitive Ask AI relation context", () => {
@@ -54,3 +60,72 @@ test("builds direction-sensitive Ask AI relation context", () => {
     },
   ]);
 });
+
+test("uses two-hop verified context for change-impact questions", async () => {
+  const fixture = createFixture();
+  try {
+    fixture.db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?)").run("carddemo", "AWS CardDemo", "/carddemo", "2026-01-01T00:00:00Z");
+    fixture.db.prepare("INSERT INTO analysis_runs VALUES (?, ?, ?, ?, ?)").run("run", "carddemo", "test", "2026-01-01T00:00:00Z", coverage(3));
+    for (const id of ["PROGA", "PROGB", "PROGC"]) {
+      fixture.db.prepare("INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, "run", "Program", id, id, `${id}.cbl`, "{}");
+    }
+    insertRelation(fixture.db, "a-to-b", "run", "CALLS", "PROGA", "PROGB");
+    insertRelation(fixture.db, "b-to-c", "run", "CALLS", "PROGB", "PROGC");
+
+    const result = await answerQuestion("What happens if PROGA changes?", "carddemo", undefined, fixture.path);
+    assert.equal(result.intent, "change-impact");
+    assert.deepEqual(result.relations.map((relation) => `${relation.source}->${relation.target}`), ["PROGA->PROGB", "PROGB->PROGC"]);
+  } finally {
+    fixture.close();
+  }
+});
+
+function createFixture() {
+  const directory = mkdtempSync(path.join(tmpdir(), "legacy-ask-"));
+  const databasePath = path.join(directory, "analysis.sqlite");
+  const db = new Database(databasePath);
+  bootstrapAnalysisDatabase(db);
+  db.prepare("INSERT INTO analysis_engines VALUES (?, ?, ?, ?)").run("test", "Test Analyzer", "1", "test");
+  return {
+    db,
+    path: databasePath,
+    close() {
+      db.close();
+      rmSync(directory, { recursive: true, force: true });
+    },
+  };
+}
+
+function coverage(entities: number) {
+  return JSON.stringify({
+    filesTotal: 1,
+    filesWithEntities: entities ? 1 : 0,
+    entityCoverage: entities ? 1 : 0,
+    relationCoverage: 0,
+    evidenceCoverage: 0,
+    entityCount: entities,
+    relationCount: 0,
+    evidenceCount: 0,
+    unresolvedCount: 0,
+    unsupportedCount: 0,
+    confidenceDistribution: {},
+  });
+}
+
+function insertRelation(db: Database.Database, id: string, runId: string, type: string, sourceEntityId: string, targetEntityId: string) {
+  db.prepare("INSERT INTO relations VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, runId, type, sourceEntityId, targetEntityId, targetEntityId, "{}");
+  db.prepare("INSERT INTO provenance VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    `${id}-provenance`,
+    runId,
+    "relation",
+    id,
+    "test",
+    "1",
+    "fixture",
+    0.95,
+    "high",
+    "fixture",
+    "Verified",
+    "[]",
+  );
+}

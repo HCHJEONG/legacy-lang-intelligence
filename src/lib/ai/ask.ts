@@ -10,7 +10,7 @@ export type AskResult = {
   evidence: Array<{ relationId: string; filePath: string; startLine: number; endLine: number; snippet: string }>;
 };
 
-export type AskIntent = "system-overview" | "transaction-flow" | "batch-jobs";
+export type AskIntent = "system-overview" | "transaction-flow" | "batch-jobs" | "change-impact";
 
 export type VerifiedRelationContext = {
   type: string;
@@ -25,10 +25,10 @@ export type VerifiedRelationContext = {
   confidence: string;
 };
 
-export async function answerQuestion(question: string, projectId?: string, rawIntent?: string): Promise<AskResult> {
-  const intent = parseIntent(rawIntent);
+export async function answerQuestion(question: string, projectId?: string, rawIntent?: string, databasePath?: string): Promise<AskResult> {
+  const intent = parseIntent(rawIntent) ?? inferIntent(question);
   const query = getIntentQuery(intent) ?? extractEntityQuery(question);
-  const view = getSystemMapViewModel({ query, projectId, hopLimit: 1 });
+  const view = getSystemMapViewModel({ query, projectId, hopLimit: intent === "change-impact" ? 2 : 1, databasePath });
   const entity = view.graph?.selectedEntity ?? null;
   const relations = buildRelationContext(view.graph);
   const evidence = (view.graph?.evidence ?? []).map(({ relationId, filePath, startLine, endLine, snippet }) => ({ relationId, filePath, startLine, endLine, snippet }));
@@ -45,7 +45,11 @@ export async function answerQuestion(question: string, projectId?: string, rawIn
 }
 
 function parseIntent(value?: string): AskIntent | null {
-  return value === "system-overview" || value === "transaction-flow" || value === "batch-jobs" ? value : null;
+  return value === "system-overview" || value === "transaction-flow" || value === "batch-jobs" || value === "change-impact" ? value : null;
+}
+
+function inferIntent(question: string): AskIntent | null {
+  return /\b(change|changes|changed|impact|happens|breaks|affect|affected)\b/i.test(question) ? "change-impact" : null;
 }
 
 function getIntentQuery(intent: AskIntent | null) {
@@ -116,10 +120,10 @@ function buildVerifiedFallback(context: { intent: AskIntent | null; entity: { na
   const outgoing = context.relations.filter((relation) => relation.direction === "outgoing");
   const incoming = context.relations.filter((relation) => relation.direction === "incoming");
   const outgoingText = outgoing.length
-    ? outgoing.slice(0, 6).map((relation) => `${relation.type} ${relation.target} (${relation.confidence})`).join(", ")
+    ? outgoing.slice(0, context.intent === "change-impact" ? 10 : 6).map((relation) => `${relation.type} ${relation.target} (${relation.confidence})`).join(", ")
     : "none";
   const incomingText = incoming.length
-    ? incoming.slice(0, 6).map((relation) => `${relation.source} -> ${relation.type} (${relation.confidence})`).join(", ")
+    ? incoming.slice(0, context.intent === "change-impact" ? 10 : 6).map((relation) => `${relation.source} -> ${relation.type} (${relation.confidence})`).join(", ")
     : "none";
   const evidenceText = context.evidence.length
     ? context.evidence.slice(0, 4).map((item) => `${item.filePath}:${item.startLine}-${item.endLine}`).join(", ")
@@ -131,5 +135,6 @@ function buildVerifiedFallback(context: { intent: AskIntent | null; entity: { na
 function formatIntent(intent: AskIntent) {
   if (intent === "system-overview") return "System overview";
   if (intent === "transaction-flow") return "Transaction flow";
-  return "Major batch jobs";
+  if (intent === "batch-jobs") return "Major batch jobs";
+  return "Change impact";
 }

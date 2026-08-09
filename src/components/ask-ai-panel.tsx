@@ -25,7 +25,7 @@ type AskResponse = {
   evidence: Array<{ relationId: string; filePath: string; startLine: number; endLine: number }>;
 };
 
-type AskIntent = "system-overview" | "transaction-flow" | "batch-jobs";
+type AskIntent = "system-overview" | "transaction-flow" | "batch-jobs" | "change-impact";
 
 const suggestedQuestions: Array<{ intent: AskIntent; label: string; question: string }> = [
   { intent: "system-overview", label: "System overview", question: "What does the CardDemo system do?" },
@@ -100,6 +100,16 @@ export function AskAiPanel({ projectId }: { projectId?: string }) {
         <div className="mt-3 flex flex-wrap gap-2">
           <a href={result.entity ? buildEntityHref(result.entity.name, result.entity.id, projectId) : "#system-map"} className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"><Network className="size-3.5" /> Open System Map</a>
           <a href="#source-evidence" className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"><FileCode2 className="size-3.5" /> Source Evidence</a>
+          {result.entity ? (
+            <button
+              type="button"
+              onClick={() => void ask(`What happens if ${result.entity?.name} changes?`, "change-impact")}
+              disabled={loading}
+              className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"
+            >
+              What happens if this changes?
+            </button>
+          ) : null}
         </div>
         {result.evidence.length ? <div className="mt-3 flex flex-wrap gap-2">{result.evidence.slice(0, 6).map((item) => <a href={`#${buildEvidenceId(item)}`} key={`${item.relationId}:${item.filePath}:${item.startLine}`} className="rounded-md bg-zinc-50 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100">{item.filePath}:{item.startLine}-{item.endLine}</a>)}</div> : null}
       </div> : null}
