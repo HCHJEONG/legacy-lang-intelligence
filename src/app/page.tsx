@@ -26,6 +26,7 @@ type HomeProps = {
     confidence?: "all" | "high" | "medium" | "low";
     locale?: string;
     project?: string;
+    view?: string;
   }>;
 };
 
@@ -76,7 +77,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
               <section className="space-y-5">
                 <AskAiPanel projectId={projectId} />
-                <SystemMapPanel graph={viewModel.graph} query={query} projectId={projectId} hopLimit={hopLimit} filters={filters} copy={copy} />
+              <SystemMapPanel graph={viewModel.graph} query={query} projectId={projectId} hopLimit={hopLimit} filters={filters} view={params?.view} copy={copy} />
                 <EvidencePanel graph={viewModel.graph} projectId={projectId} copy={copy} />
                 <RepositoryIngestionPanel />
               </section>
@@ -306,6 +307,7 @@ function SystemMapPanel({
   projectId,
   hopLimit,
   filters,
+  view,
   copy,
 }: {
   graph: ReturnType<typeof getSystemMapViewModel>["graph"];
@@ -313,23 +315,27 @@ function SystemMapPanel({
   projectId?: string;
   hopLimit: 1 | 2 | 3;
   filters: { entityType?: string; relationType?: string; confidence?: string };
+  view?: string;
   copy: Messages;
 }) {
+  const unresolvedEdges = graph?.edges.filter((edge) => edge.target.startsWith("unresolved:")) ?? [];
+  const resolvedEdges = graph?.edges.filter((edge) => !edge.target.startsWith("unresolved:")) ?? [];
+  const isImpact = view === "impact";
   return (
     <section id="system-map" className="rounded-md border border-zinc-200 bg-white">
       <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
           <Network className="size-4 text-zinc-600" />
           <div>
-            <h2 className="text-sm font-semibold">{copy.map}</h2>
-            <p className="text-xs text-zinc-500">{copy.journey}</p>
+            <h2 className="text-sm font-semibold">{isImpact ? "Impact Graph" : copy.map}</h2>
+            <p className="text-xs text-zinc-500">{isImpact ? "Bounded deterministic traversal from the selected entity" : copy.journey}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-1">
           {[1, 2, 3].map((hop) => (
             <a
               key={hop}
-              href={`/?${buildSystemMapQuery({ query, projectId, entityId: graph?.selectedEntity?.id, hopLimit: hop as 1 | 2 | 3, filters })}`}
+              href={`/?${buildSystemMapQuery({ query, projectId, entityId: graph?.selectedEntity?.id, hopLimit: hop as 1 | 2 | 3, filters, view })}`}
               className={[
                 "inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium",
                 hopLimit === hop ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-200 bg-white text-zinc-600",
@@ -343,6 +349,7 @@ function SystemMapPanel({
             {projectId ? <input type="hidden" name="project" value={projectId} /> : null}
             {graph?.selectedEntity ? <input type="hidden" name="entity" value={graph.selectedEntity.id} /> : null}
             <input type="hidden" name="hops" value={hopLimit} />
+            {view ? <input type="hidden" name="view" value={view} /> : null}
             {filters.entityType && filters.entityType !== "all" ? <input type="hidden" name="entityType" value={filters.entityType} /> : null}
             {filters.confidence && filters.confidence !== "all" ? <input type="hidden" name="confidence" value={filters.confidence} /> : null}
             <select name="relationType" defaultValue={filters.relationType ?? "all"} className="h-7 rounded-md border border-zinc-200 bg-white px-2 text-xs">
@@ -358,6 +365,7 @@ function SystemMapPanel({
             <span className="font-semibold text-zinc-950">{graph.selectedEntity.name}</span>
             <span>{graph.nodes.length} nodes</span>
             <span>{graph.edges.length} relations</span>
+            {unresolvedEdges.length ? <a href="#unresolved-relations" className="text-zinc-700 underline underline-offset-2">{unresolvedEdges.length} unresolved</a> : null}
             {graph.truncated ? <span className="text-red-600">{copy.truncated}</span> : null}
           </div>
           <div className="h-[520px]">
@@ -366,11 +374,21 @@ function SystemMapPanel({
           <div className="border-t border-zinc-200 p-4">
             <p className="mb-2 text-xs font-semibold uppercase text-zinc-500">{copy.follow}</p>
             <div className="flex flex-wrap gap-2">
-              {graph.edges.slice(0, 12).map((edge) => {
+              {resolvedEdges.slice(0, 12).map((edge) => {
                 const target = graph.nodes.find((node) => node.id === edge.target);
-                return target && !target.id.startsWith("unresolved:") ? <a key={edge.id} href={`/?${buildSystemMapQuery({ query: target.label, projectId, entityId: target.id, hopLimit, filters })}`} className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50">{edge.label} → {target.label}</a> : null;
+                return target ? <a key={edge.id} href={`/?${buildSystemMapQuery({ query: target.label, projectId, entityId: target.id, hopLimit, filters, view })}`} className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50">{edge.label} → {target.label}</a> : null;
               })}
             </div>
+            {unresolvedEdges.length ? (
+              <details id="unresolved-relations" className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+                <summary className="cursor-pointer text-xs font-semibold uppercase text-zinc-500">Show unresolved</summary>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {unresolvedEdges.slice(0, 20).map((edge) => (
+                    <span key={edge.id} className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-600">{edge.label} unresolved target ({edge.confidenceBand})</span>
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </div>
         </>
       ) : (
@@ -477,12 +495,14 @@ function buildSystemMapQuery({
   entityId,
   hopLimit,
   filters,
+  view,
 }: {
   query: string;
   projectId?: string;
   entityId?: string;
   hopLimit?: 1 | 2 | 3;
   filters?: { entityType?: string; relationType?: string; confidence?: string };
+  view?: string;
 }) {
   const params = new URLSearchParams();
   if (projectId) params.set("project", projectId);
@@ -492,6 +512,7 @@ function buildSystemMapQuery({
   if (filters?.entityType && filters.entityType !== "all") params.set("entityType", filters.entityType);
   if (filters?.relationType && filters.relationType !== "all") params.set("relationType", filters.relationType);
   if (filters?.confidence && filters.confidence !== "all") params.set("confidence", filters.confidence);
+  if (view) params.set("view", view);
   return params.toString();
 }
 
