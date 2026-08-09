@@ -289,6 +289,7 @@ function getNeighborhoodGraph(
   const nodeIds = new Set([entityId]);
   const edges = new Map<string, NeighborhoodGraph["edges"][number]>();
   let frontier = new Set([entityId]);
+  const visited = new Set([entityId]);
   let truncated = false;
 
   for (let hop = 0; hop < hopLimit; hop += 1) {
@@ -311,10 +312,14 @@ function getNeighborhoodGraph(
           status: relation.status ?? "unknown",
           confidenceBand: relation.confidenceBand ?? "unknown",
         });
-        if (relation.targetEntityId && !frontier.has(relation.targetEntityId)) {
-          nextFrontier.add(relation.targetEntityId);
+        const nextId = relation.sourceEntityId === currentId ? relation.targetEntityId : relation.sourceEntityId;
+        if (nextId && !visited.has(nextId)) {
+          nextFrontier.add(nextId);
         }
       }
+    }
+    for (const nextId of nextFrontier) {
+      visited.add(nextId);
     }
     frontier = nextFrontier;
   }

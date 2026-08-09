@@ -61,6 +61,51 @@ test("keeps project analysis runs isolated", () => {
   }
 });
 
+test("expands multi-hop neighborhoods in the direction away from the selected entity", () => {
+  const fixture = createFixture();
+  try {
+    fixture.db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?)").run("carddemo", "AWS CardDemo", "/carddemo", "2026-01-01T00:00:00Z");
+    insertRun(fixture.db, "run", "carddemo", "2026-01-01T00:00:00Z", 5);
+    for (const id of ["A", "B", "C", "D", "E"]) {
+      insertEntity(fixture.db, id, "run", id);
+    }
+    insertRelation(fixture.db, "c-to-a", "run", "CALLS", "C", "A");
+    insertRelation(fixture.db, "d-to-c", "run", "CALLS", "D", "C");
+    insertRelation(fixture.db, "a-to-b", "run", "CALLS", "A", "B");
+    insertRelation(fixture.db, "b-to-e", "run", "CALLS", "B", "E");
+
+    const view = getSystemMapViewModel({ databasePath: fixture.path, projectId: "carddemo", query: "A", entityId: "A", hopLimit: 2 });
+    const nodeIds = new Set(view.graph?.nodes.map((node) => node.id));
+    assert.deepEqual(nodeIds, new Set(["A", "B", "C", "D", "E"]));
+  } finally {
+    fixture.close();
+  }
+});
+
+test("applies relation and confidence filters to neighborhood relations", () => {
+  const fixture = createFixture();
+  try {
+    fixture.db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?)").run("carddemo", "AWS CardDemo", "/carddemo", "2026-01-01T00:00:00Z");
+    insertRun(fixture.db, "run", "carddemo", "2026-01-01T00:00:00Z", 3);
+    for (const id of ["A", "B", "C"]) {
+      insertEntity(fixture.db, id, "run", id);
+    }
+    insertRelation(fixture.db, "a-to-b", "run", "CALLS", "A", "B", "high");
+    insertRelation(fixture.db, "a-to-c", "run", "COPIES", "A", "C", "low");
+
+    const view = getSystemMapViewModel({
+      databasePath: fixture.path,
+      projectId: "carddemo",
+      query: "A",
+      entityId: "A",
+      filters: { relationType: "CALLS", confidence: "high" },
+    });
+    assert.deepEqual(view.graph?.edges.map((edge) => edge.id), ["a-to-b"]);
+  } finally {
+    fixture.close();
+  }
+});
+
 function createFixture() {
   const directory = mkdtempSync(path.join(tmpdir(), "legacy-analysis-"));
   const databasePath = path.join(directory, "analysis.sqlite");
@@ -83,4 +128,30 @@ function insertRun(db: Database.Database, id: string, projectId: string, generat
 
 function insertEntity(db: Database.Database, id: string, runId: string, name: string) {
   db.prepare("INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, runId, "Program", name, name, `${name}.cbl`, "{}");
+}
+
+function insertRelation(
+  db: Database.Database,
+  id: string,
+  runId: string,
+  type: string,
+  sourceEntityId: string,
+  targetEntityId: string,
+  confidenceBand = "high",
+) {
+  db.prepare("INSERT INTO relations VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, runId, type, sourceEntityId, targetEntityId, targetEntityId, "{}");
+  db.prepare("INSERT INTO provenance VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    `${id}-provenance`,
+    runId,
+    "relation",
+    id,
+    "test",
+    "1",
+    "fixture",
+    confidenceBand === "high" ? 0.95 : 0.35,
+    confidenceBand,
+    "fixture",
+    "Verified",
+    "[]",
+  );
 }

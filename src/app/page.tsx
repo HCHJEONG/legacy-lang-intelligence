@@ -193,33 +193,36 @@ function EntitySearch({
         <Search className="size-4 text-zinc-600" />
         <h2 className="text-sm font-semibold">{copy.search}</h2>
       </div>
-      <form className="mb-3 flex gap-2">
+      <form className="mb-3 space-y-3">
         {projectId ? <input type="hidden" name="project" value={projectId} /> : null}
-        <input
-          name="q"
-          defaultValue={query}
-          className="h-8 min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2.5 text-sm outline-none focus:border-zinc-500"
-          placeholder={copy.searchPlaceholder}
-        />
-        <Button size="sm" variant="outline" type="submit">
-          <Search className="size-3.5" />
-          Search
-        </Button>
+        {filters.relationType && filters.relationType !== "all" ? <input type="hidden" name="relationType" value={filters.relationType} /> : null}
+        <div className="flex gap-2">
+          <input
+            name="q"
+            defaultValue={query}
+            className="h-8 min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2.5 text-sm outline-none focus:border-zinc-500"
+            placeholder={copy.searchPlaceholder}
+          />
+          <Button size="sm" variant="outline" type="submit">
+            <Search className="size-3.5" />
+            Search
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <select name="entityType" defaultValue={filters.entityType ?? "all"} className="h-8 rounded-md border border-zinc-300 bg-white px-2 text-xs">
+            <option value="all">{copy.allNodes}</option>
+            {['Program', 'Paragraph', 'Copybook', 'Field', 'Job', 'Step', 'Dataset', 'Transaction', 'Table'].map((type) => <option key={type} value={type}>{type}</option>)}
+          </select>
+          <select name="confidence" defaultValue={filters.confidence ?? "all"} className="h-8 rounded-md border border-zinc-300 bg-white px-2 text-xs">
+            <option value="all">{copy.allConfidence}</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+          </select>
+        </div>
       </form>
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <select name="entityType" defaultValue={filters.entityType ?? "all"} className="h-8 rounded-md border border-zinc-300 bg-white px-2 text-xs">
-          <option value="all">{copy.allNodes}</option>
-          {['Program', 'Paragraph', 'Copybook', 'Field', 'Job', 'Step', 'Dataset', 'Transaction', 'Table'].map((type) => <option key={type} value={type}>{type}</option>)}
-        </select>
-        <select name="confidence" defaultValue={filters.confidence ?? "all"} className="h-8 rounded-md border border-zinc-300 bg-white px-2 text-xs">
-          <option value="all">{copy.allConfidence}</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
-        </select>
-      </div>
       <div className="space-y-2">
         {results.map((entity) => (
           <a
             key={entity.id}
-            href={`/?${projectId ? `project=${encodeURIComponent(projectId)}&` : ""}q=${encodeURIComponent(query)}&entity=${encodeURIComponent(entity.id)}`}
+            href={`/?${buildSystemMapQuery({ query, projectId, entityId: entity.id, filters })}`}
             className={[
               "block rounded-md border px-3 py-2 text-sm transition-colors hover:bg-zinc-50",
               entity.id === selectedId ? "border-zinc-950 bg-zinc-50" : "border-zinc-200 bg-white",
@@ -269,7 +272,7 @@ function SystemMapPanel({
           {[1, 2, 3].map((hop) => (
             <a
               key={hop}
-              href={`/?${projectId ? `project=${encodeURIComponent(projectId)}&` : ""}q=${encodeURIComponent(query)}${graph?.selectedEntity ? `&entity=${encodeURIComponent(graph.selectedEntity.id)}` : ""}&hops=${hop}`}
+              href={`/?${buildSystemMapQuery({ query, projectId, entityId: graph?.selectedEntity?.id, hopLimit: hop as 1 | 2 | 3, filters })}`}
               className={[
                 "inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium",
                 hopLimit === hop ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-200 bg-white text-zinc-600",
@@ -283,6 +286,8 @@ function SystemMapPanel({
             {projectId ? <input type="hidden" name="project" value={projectId} /> : null}
             {graph?.selectedEntity ? <input type="hidden" name="entity" value={graph.selectedEntity.id} /> : null}
             <input type="hidden" name="hops" value={hopLimit} />
+            {filters.entityType && filters.entityType !== "all" ? <input type="hidden" name="entityType" value={filters.entityType} /> : null}
+            {filters.confidence && filters.confidence !== "all" ? <input type="hidden" name="confidence" value={filters.confidence} /> : null}
             <select name="relationType" defaultValue={filters.relationType ?? "all"} className="h-7 rounded-md border border-zinc-200 bg-white px-2 text-xs">
               <option value="all">{copy.allRelations}</option><option value="CALLS">CALLS</option><option value="COPIES">COPIES</option><option value="EXECUTES">EXECUTES</option><option value="READS">READS</option><option value="WRITES">WRITES</option>
             </select>
@@ -306,7 +311,7 @@ function SystemMapPanel({
             <div className="flex flex-wrap gap-2">
               {graph.edges.slice(0, 12).map((edge) => {
                 const target = graph.nodes.find((node) => node.id === edge.target);
-                return target && !target.id.startsWith("unresolved:") ? <a key={edge.id} href={`/?${projectId ? `project=${encodeURIComponent(projectId)}&` : ""}q=${encodeURIComponent(target.label)}&entity=${encodeURIComponent(target.id)}&hops=${hopLimit}`} className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50">{edge.label} → {target.label}</a> : null;
+                return target && !target.id.startsWith("unresolved:") ? <a key={edge.id} href={`/?${buildSystemMapQuery({ query: target.label, projectId, entityId: target.id, hopLimit, filters })}`} className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50">{edge.label} → {target.label}</a> : null;
               })}
             </div>
           </div>
@@ -398,6 +403,30 @@ function parseHopLimit(value?: string): 1 | 2 | 3 {
     return 3;
   }
   return 1;
+}
+
+function buildSystemMapQuery({
+  query,
+  projectId,
+  entityId,
+  hopLimit,
+  filters,
+}: {
+  query: string;
+  projectId?: string;
+  entityId?: string;
+  hopLimit?: 1 | 2 | 3;
+  filters?: { entityType?: string; relationType?: string; confidence?: string };
+}) {
+  const params = new URLSearchParams();
+  if (projectId) params.set("project", projectId);
+  params.set("q", query);
+  if (entityId) params.set("entity", entityId);
+  if (hopLimit) params.set("hops", String(hopLimit));
+  if (filters?.entityType && filters.entityType !== "all") params.set("entityType", filters.entityType);
+  if (filters?.relationType && filters.relationType !== "all") params.set("relationType", filters.relationType);
+  if (filters?.confidence && filters.confidence !== "all") params.set("confidence", filters.confidence);
+  return params.toString();
 }
 
 function titleCase(value: string) {
