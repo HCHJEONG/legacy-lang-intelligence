@@ -111,7 +111,9 @@ English is the default at `/en`. Korean is available at `/ko`; switching languag
 
 ## Ingestion Operations
 
-The current PoC fetches a public GitHub repository, pins the HEAD commit, creates an isolated shallow clone, runs the existing analysis pipeline, and persists the result. Production hardening will add asynchronous worker state, progress polling, cancellation, concurrency limits, and retention cleanup.
+The current PoC fetches a public GitHub repository, pins the HEAD commit, creates an isolated shallow clone, runs the existing analysis pipeline, and persists the result. The web API now returns an ingestion run id immediately, records phase/progress state in SQLite, exposes `GET /api/ingest/status?runId=...`, supports user cancellation through `DELETE /api/ingest/status?runId=...`, and limits repository ingestion concurrency to one active run for the initial private-instance deployment.
+
+The UI polls the persisted run state and shows concrete phases such as cloning, file discovery/static analysis, COBOL/copybook/JCL extraction, graph and coverage persistence, completion, failure, or cancellation. Completed runs show an orientation summary and next actions for Ask AI, System Map, and Analysis Quality.
 
 For the first AWS private-instance deployment, prefer `t3a.medium` if `t3a.small` is already hosting two containers. The application can share the medium during PoC with ingestion concurrency limited to one; move ingestion to a separate worker host when sustained analysis or memory pressure appears in CloudWatch.
 
@@ -135,7 +137,8 @@ The app should show Analysis Quality before or alongside graph exploration so us
 
 - Confirm ALB target health and the `/en` health check after each deployment without changing the existing DNS or host rules.
 - Verify the GCP service account has Vertex AI permissions and Ask AI works with the packaged `/app/gcp-key.json`.
-- Complete asynchronous ingestion workers, progress UI, cancellation, concurrency limits, duplicate commit reuse, and retention cleanup.
+- Add duplicate commit reuse and retention cleanup for cached ingestion workspaces.
+- Document and verify persistent host storage for `analysis-output/carddemo.sqlite` plus SQLite WAL companion files before production redeploys.
 - Add automated integration, security, localization, and production deployment tests.
 
 ## Source Attribution
