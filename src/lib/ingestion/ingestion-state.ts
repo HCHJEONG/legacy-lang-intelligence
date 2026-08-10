@@ -42,6 +42,11 @@ export function hasActiveIngestionRun() {
   });
 }
 
+export function findCompletedIngestionRun(sourceUrl: string, commitSha: string): IngestionRunRecord | undefined {
+  const row = withDatabase((sqlite) => sqlite.prepare(`SELECT id FROM ingestion_runs WHERE source_url = ? AND commit_sha = ? AND status = 'completed' ORDER BY updated_at DESC LIMIT 1`).get(sourceUrl, commitSha)) as { id: string } | undefined;
+  return row ? getIngestionRun(row.id) : undefined;
+}
+
 export function getIngestionRun(id: string): IngestionRunRecord | undefined {
   const row = withDatabase((sqlite) => sqlite.prepare(`SELECT id, source_url AS sourceUrl, access_type AS accessType, status, phase, progress, commit_sha AS commitSha, manifest_json AS manifestJson, error_message AS errorMessage, created_at AS createdAt, updated_at AS updatedAt FROM ingestion_runs WHERE id = ?`).get(id)) as Omit<IngestionRunRecord, "manifest"> & { manifestJson?: string | null } | undefined;
   if (!row) return undefined;

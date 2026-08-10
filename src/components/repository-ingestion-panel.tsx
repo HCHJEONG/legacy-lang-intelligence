@@ -37,10 +37,16 @@ export function RepositoryIngestionPanel() {
     setBusy(true); setMessage(null); setError(null);
     try {
       const response = await fetch("/api/ingest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url, access }) });
-      const result = (await response.json()) as { message?: string; error?: string; projectId?: string; ingestionRunId?: string; status?: string };
+      const result = (await response.json()) as { message?: string; error?: string; projectId?: string; ingestionRunId?: string; status?: string; reusedFromRunId?: string };
       if (!response.ok) throw new Error(result.error ?? "Repository validation failed");
       setMessage(result.message ?? "Request accepted.");
       if (result.projectId) setProjectId(result.projectId);
+      if (result.ingestionRunId && result.status === "completed") {
+        const statusResponse = await fetch(`/api/ingest/status?runId=${encodeURIComponent(result.ingestionRunId)}`, { cache: "no-store" });
+        const statusPayload = (await statusResponse.json()) as IngestionRun & { error?: string };
+        if (statusResponse.ok) setRun(statusPayload);
+        return;
+      }
       if (result.ingestionRunId && result.status === "queued") {
         await pollRun(result.ingestionRunId, result.projectId ?? null);
       }

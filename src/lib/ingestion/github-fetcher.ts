@@ -21,7 +21,7 @@ export type RepositoryManifest = {
 export async function fetchPublicGithubRepository(inputUrl: string): Promise<RepositoryManifest> {
   const repository = parseGithubRepository(inputUrl);
   if (!repository) throw new Error("Only public HTTPS GitHub repository URLs are supported.");
-  const commitSha = await resolveHead(repository);
+  const commitSha = await resolvePublicGithubHead(repository);
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const sourceRoot = path.resolve(".cache", "ingestion", runId, "source");
   await fs.mkdir(path.dirname(sourceRoot), { recursive: true });
@@ -35,7 +35,7 @@ export async function fetchPublicGithubRepository(inputUrl: string): Promise<Rep
   }
 }
 
-async function resolveHead(repository: GithubRepository) {
+export async function resolvePublicGithubHead(repository: GithubRepository) {
   try {
     const result = await runGit(["ls-remote", repository.url, "HEAD"]);
     const sha = result.stdout.trim().split(/\s+/)[0];

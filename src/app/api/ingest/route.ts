@@ -1,7 +1,7 @@
-import { fetchPublicGithubRepository } from "@/lib/ingestion/github-fetcher";
+import { fetchPublicGithubRepository, resolvePublicGithubHead } from "@/lib/ingestion/github-fetcher";
 import { parseGithubRepository } from "@/lib/ingestion/github-url";
 import { analyzeAndPersistSource } from "@/lib/ingestion/analyze-source";
-import { createIngestionRun, getIngestionRun, hasActiveIngestionRun, updateIngestionRun } from "@/lib/ingestion/ingestion-state";
+import { createIngestionRun, findCompletedIngestionRun, getIngestionRun, hasActiveIngestionRun, updateIngestionRun } from "@/lib/ingestion/ingestion-state";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { url?: string; access?: "public" | "private" | "restricted" };
@@ -11,10 +11,35 @@ export async function POST(request: Request) {
   if (body.access === "private") return Response.json({ status: "contact", message: "Private repository analysis is available by arrangement. Please contact hcjeong@empas.com." });
   if (body.access === "restricted") return Response.json({ status: "contact", message: "If source code cannot leave your company, contact hcjeong@empas.com for a private deployment or in-company analysis option." });
   if (hasActiveIngestionRun()) return Response.json({ error: "Another repository analysis is already running. Please wait for it to finish or cancel it before starting a new one." }, { status: 409 });
-  const runId = createIngestionRun(url, body.access ?? "public");
+  const sourceUrl = `https://github.com/${repository.owner}/${repository.name}`;
+  const commitSha = await resolvePublicGithubHead(repository);
+  const reusableRun = findCompletedIngestionRun(sourceUrl, commitSha);
+  const runId = createIngestionRun(sourceUrl, body.access ?? "public");
   const projectId = `github:${repository.owner.toLowerCase()}/${repository.name.toLowerCase()}`;
 
-  void runPublicRepositoryIngestion({ runId, url, projectId, projectName: `${repository.owner}/${repository.name}` });
+  if (reusableRun) {
+    const reusableManifest = reusableRun.manifest && typeof reusableRun.manifest === "object" ? reusableRun.manifest : {};
+    updateIngestionRun(runId, "completed", "Reusing existing analysis for unchanged commit", 100, {
+      commitSha,
+      manifest: {
+        ...reusableManifest,
+        reusedFromRunId: reusableRun.id,
+        sourceUrl,
+        commitSha,
+        projectId,
+      },
+    });
+    return Response.json({
+      status: "completed",
+      ingestionRunId: runId,
+      projectId,
+      reusedFromRunId: reusableRun.id,
+      message: "This repository commit was already analyzed. Reusing the existing persisted result.",
+      policy: "The repository is treated as source input only; repository code is never executed.",
+    });
+  }
+
+  void runPublicRepositoryIngestion({ runId, url: sourceUrl, projectId, projectName: `${repository.owner}/${repository.name}` });
   return Response.json({
     status: "queued",
     ingestionRunId: runId,

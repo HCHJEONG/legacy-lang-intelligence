@@ -111,7 +111,7 @@ English is the default at `/en`. Korean is available at `/ko`; switching languag
 
 ## Ingestion Operations
 
-The current PoC fetches a public GitHub repository, pins the HEAD commit, creates an isolated shallow clone, runs the existing analysis pipeline, and persists the result. The web API now returns an ingestion run id immediately, records phase/progress state in SQLite, exposes `GET /api/ingest/status?runId=...`, supports user cancellation through `DELETE /api/ingest/status?runId=...`, and limits repository ingestion concurrency to one active run for the initial private-instance deployment.
+The current PoC fetches a public GitHub repository, pins the HEAD commit, creates an isolated shallow clone, runs the existing analysis pipeline, and persists the result. The web API now returns an ingestion run id immediately, records phase/progress state in SQLite, exposes `GET /api/ingest/status?runId=...`, supports user cancellation through `DELETE /api/ingest/status?runId=...`, reuses a completed analysis when the same repository commit was already persisted, and limits repository ingestion concurrency to one active run for the initial private-instance deployment.
 
 The UI polls the persisted run state and shows concrete phases such as cloning, file discovery/static analysis, COBOL/copybook/JCL extraction, graph and coverage persistence, completion, failure, or cancellation. Completed runs show an orientation summary and next actions for Ask AI, System Map, and Analysis Quality.
 
@@ -137,7 +137,7 @@ The app should show Analysis Quality before or alongside graph exploration so us
 
 - Confirm ALB target health and the `/en` health check after each deployment without changing the existing DNS or host rules.
 - Verify the GCP service account has Vertex AI permissions and Ask AI works with the packaged `/app/gcp-key.json`.
-- Add duplicate commit reuse and retention cleanup for cached ingestion workspaces.
+- Add retention cleanup for cached ingestion workspaces.
 - Document and verify persistent host storage for `analysis-output/carddemo.sqlite` plus SQLite WAL companion files before production redeploys.
 - Add automated integration, security, localization, and production deployment tests.
 
