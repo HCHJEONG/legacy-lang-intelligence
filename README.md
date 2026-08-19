@@ -119,9 +119,9 @@ For the first AWS private-instance deployment, prefer `t3a.medium` if `t3a.small
 
 The AWS deployment does not depend on the existing lawvot nginx repository or ECR. Run `.fordeploy/deploy-aws.sh` from WSL; it builds, saves, copies, and loads the Docker image through the Bastion and replaces only the `cobolai` container. The container uses host port `3300` and container port `3000`. ALB and Route 53 are manually configured, so normal redeployments keep `CONFIGURE_ALB=0`.
 
-Runtime environment values follow the LawVot pattern: keep secrets in the local `.env.local` file, which is Git-ignored, and include it in the Docker image at `/app/.env.local`. The remote host receives only the image tar under the dedicated application directory; no root-level files or separate runtime config files are overwritten.
+Runtime environment values and credentials stay outside the Docker image. On yws, runtime files live under `/home/ubuntu/cobolai`: `.env.local`, `gcp-key.json`, and `analysis-output/carddemo.sqlite`. The deployment script passes `.env.local` with `--env-file` and bind-mounts `gcp-key.json` plus `analysis-output`.
 
-Before building, `.fordeploy/deploy-aws.sh` restores `.env.local` from `LEGACY_LANG_ENV_FILE_SOURCE` when the repository root does not have one. The default source is `/mnt/j/VSCodeProjects/legacy-lang-intelligence/.fordeploy/aws-backup/.env.local`; the temporary root copy is removed after deployment, or the original root file is restored.
+The Docker image should contain application code only. Do not commit `.env.local`, `gcp-key.json`, image archives, SQLite databases, or copied runtime secrets.
 
 ## Product UX Principle
 
@@ -136,7 +136,7 @@ The app should show Analysis Quality before or alongside graph exploration so us
 ## Remaining Work
 
 - Confirm ALB target health and the `/en` health check after each deployment without changing the existing DNS or host rules.
-- Verify the GCP service account has Vertex AI permissions and Ask AI works with the packaged `/app/gcp-key.json`.
+- Verify the GCP service account has Vertex AI permissions and Ask AI works with the mounted `/app/gcp-key.json`.
 - Add retention cleanup for cached ingestion workspaces.
 - Document and verify persistent host storage for `analysis-output/carddemo.sqlite` plus SQLite WAL companion files before production redeploys.
 - Add automated integration, security, localization, and production deployment tests.

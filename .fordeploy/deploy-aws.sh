@@ -2,73 +2,34 @@
 set -euo pipefail
 
 : "${BASTION_HOST:=ubuntu@43.202.136.180}"
-: "${PRIVATE_HOST:=ubuntu@172.31.68.164}"
+: "${PRIVATE_HOST:=ubuntu@172.31.76.194}"
 : "${BASTION_SSH_KEY:=${HOME}/.ssh/penvotkeypair1.pem}"
 : "${REMOTE_USER:=ubuntu}"
 : "${REMOTE_PORT:=22}"
-: "${REMOTE_BASE_DIR:=/home/ubuntu/docker_images/legacy-lang-intelligence}"
+: "${REMOTE_BASE_DIR:=/home/ubuntu/docker_images/cobolai}"
+: "${APP_DIR_ON_PRIVATE:=/home/ubuntu/cobolai}"
+: "${ENV_FILE_ON_PRIVATE:=${APP_DIR_ON_PRIVATE}/.env.local}"
+: "${GCP_KEY_ON_PRIVATE:=${APP_DIR_ON_PRIVATE}/gcp-key.json}"
+: "${ANALYSIS_OUTPUT_ON_PRIVATE:=${APP_DIR_ON_PRIVATE}/analysis-output}"
+: "${HEALTH_CHECK_PATH:=/en}"
 : "${CONTAINER_NAME:=cobolai}"
 : "${CONTAINER_PORT:=3000}"
 : "${HOST_PORT:=3300}"
-: "${MEDIUM_INSTANCE_ID:=i-0c66613ecf80dc3cb}"
+: "${MEDIUM_INSTANCE_ID:=i-0fa95bb4eff77caf2}"
 : "${CONFIGURE_ALB:=0}"
-: "${LEGACY_LANG_ENV_FILE_SOURCE:=/mnt/j/VSCodeProjects/legacy-lang-intelligence/.fordeploy/aws-backup/.env.local}"
-: "${LEGACY_LANG_GCP_KEY_SOURCE:=/mnt/j/VSCodeProjects/legacy-lang-intelligence/.fordeploy/aws-backup/gcp-key.json}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-
-ENV_LOCAL_BACKUP=""
-restore_env_local() {
-  if [ -n "$ENV_LOCAL_BACKUP" ]; then
-    mv -f "$ENV_LOCAL_BACKUP" "$ROOT_DIR/.env.local"
-  else
-    rm -f "$ROOT_DIR/.env.local"
-  fi
-}
-if [ ! -f "$ROOT_DIR/.env.local" ]; then
-  if [ ! -f "$LEGACY_LANG_ENV_FILE_SOURCE" ]; then
-    echo "missing deployment env file: $LEGACY_LANG_ENV_FILE_SOURCE" >&2
-    exit 1
-  fi
-  cp "$LEGACY_LANG_ENV_FILE_SOURCE" "$ROOT_DIR/.env.local"
-else
-  ENV_LOCAL_BACKUP="$ROOT_DIR/.env.local.bak.$(date +%Y%m%d%H%M%S)"
-  cp "$ROOT_DIR/.env.local" "$ENV_LOCAL_BACKUP"
-fi
-
-GCP_KEY_BACKUP=""
-if [ ! -f "$ROOT_DIR/gcp-key.json" ]; then
-  if [ ! -f "$LEGACY_LANG_GCP_KEY_SOURCE" ]; then
-    echo "missing deployment GCP key: $LEGACY_LANG_GCP_KEY_SOURCE" >&2
-    exit 1
-  fi
-  cp "$LEGACY_LANG_GCP_KEY_SOURCE" "$ROOT_DIR/gcp-key.json"
-else
-  GCP_KEY_BACKUP="$ROOT_DIR/gcp-key.json.bak.$(date +%Y%m%d%H%M%S)"
-  cp "$ROOT_DIR/gcp-key.json" "$GCP_KEY_BACKUP"
-fi
-
-if [ ! -f "$ROOT_DIR/analysis-output/carddemo.sqlite" ]; then
-  if ! command -v npm >/dev/null 2>&1; then
-    echo "npm is required to generate analysis-output/carddemo.sqlite" >&2
-    exit 1
-  fi
-  echo "analysis-output/carddemo.sqlite is missing; generating the analysis artifact..."
-  (
-    cd "$ROOT_DIR"
-    npm ci
-    npm run ingest
-    npm run persist
-  )
-fi
-if [ ! -f "$ROOT_DIR/.env.local" ]; then
-  echo ".env.local is required for AWS deployment and is intentionally gitignored."
-  exit 1
-fi
 case "$REMOTE_BASE_DIR" in
   ""|/|/home|/home/"$REMOTE_USER")
     echo "REMOTE_BASE_DIR must be a dedicated application directory" >&2
+    exit 1
+    ;;
+esac
+
+case "$APP_DIR_ON_PRIVATE" in
+  ""|/|/home|/home/"$REMOTE_USER")
+    echo "APP_DIR_ON_PRIVATE must be a dedicated application directory" >&2
     exit 1
     ;;
 esac
@@ -85,12 +46,6 @@ log() {
 
 cleanup() {
   rm -f "$IMAGE_FILE"
-  restore_env_local
-  if [ -n "$GCP_KEY_BACKUP" ]; then
-    mv -f "$GCP_KEY_BACKUP" "$ROOT_DIR/gcp-key.json"
-  else
-    rm -f "$ROOT_DIR/gcp-key.json"
-  fi
 }
 trap cleanup EXIT
 
@@ -118,6 +73,11 @@ ssh "${SSH_OPTS[@]}" "$BASTION_HOST" \
   BASTION_TAR="$BASTION_TAR" \
   PRIVATE_TAR="$PRIVATE_TAR" \
   REMOTE_BASE_DIR="$REMOTE_BASE_DIR" \
+  APP_DIR_ON_PRIVATE="$APP_DIR_ON_PRIVATE" \
+  ENV_FILE_ON_PRIVATE="$ENV_FILE_ON_PRIVATE" \
+  GCP_KEY_ON_PRIVATE="$GCP_KEY_ON_PRIVATE" \
+  ANALYSIS_OUTPUT_ON_PRIVATE="$ANALYSIS_OUTPUT_ON_PRIVATE" \
+  HEALTH_CHECK_PATH="$HEALTH_CHECK_PATH" \
   IMAGE="$IMAGE" \
   CONTAINER_NAME="$CONTAINER_NAME" \
   HOST_PORT="$HOST_PORT" \
@@ -130,6 +90,11 @@ ssh -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$PRIVATE_H
   BASTION_TAR="$BASTION_TAR" \
   PRIVATE_TAR="$PRIVATE_TAR" \
   REMOTE_BASE_DIR="$REMOTE_BASE_DIR" \
+  APP_DIR_ON_PRIVATE="$APP_DIR_ON_PRIVATE" \
+  ENV_FILE_ON_PRIVATE="$ENV_FILE_ON_PRIVATE" \
+  GCP_KEY_ON_PRIVATE="$GCP_KEY_ON_PRIVATE" \
+  ANALYSIS_OUTPUT_ON_PRIVATE="$ANALYSIS_OUTPUT_ON_PRIVATE" \
+  HEALTH_CHECK_PATH="$HEALTH_CHECK_PATH" \
   IMAGE="$IMAGE" \
   CONTAINER_NAME="$CONTAINER_NAME" \
   HOST_PORT="$HOST_PORT" \
@@ -137,24 +102,46 @@ ssh -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$PRIVATE_H
   bash -s <<'PRIVATE_SCRIPT'
 set -euo pipefail
 echo "[private] loading image and replacing container: $CONTAINER_NAME"
+DOCKER="sudo docker"
+if [ ! -d "$APP_DIR_ON_PRIVATE" ]; then
+  echo "[private] missing app dir: $APP_DIR_ON_PRIVATE" >&2
+  exit 1
+fi
+if [ ! -f "$ENV_FILE_ON_PRIVATE" ]; then
+  echo "[private] missing env file: $ENV_FILE_ON_PRIVATE" >&2
+  exit 1
+fi
+if [ ! -f "$GCP_KEY_ON_PRIVATE" ]; then
+  echo "[private] missing gcp key file: $GCP_KEY_ON_PRIVATE" >&2
+  exit 1
+fi
+if [ ! -d "$ANALYSIS_OUTPUT_ON_PRIVATE" ]; then
+  echo "[private] missing analysis output dir: $ANALYSIS_OUTPUT_ON_PRIVATE" >&2
+  exit 1
+fi
 mkdir -p "$REMOTE_BASE_DIR/images"
 mv "$PRIVATE_TAR" "$REMOTE_BASE_DIR/images/"
-docker load -i "$REMOTE_BASE_DIR/images/$(basename "$PRIVATE_TAR")"
+$DOCKER load -i "$REMOTE_BASE_DIR/images/$(basename "$PRIVATE_TAR")"
 rm -f "$REMOTE_BASE_DIR/images/$(basename "$PRIVATE_TAR")"
-docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-docker run -d --restart unless-stopped --name "$CONTAINER_NAME" \
-  -p "0.0.0.0:${HOST_PORT}:${CONTAINER_PORT}" "$IMAGE"
-if ! docker ps --filter "name=^/$CONTAINER_NAME$" --filter status=running --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+$DOCKER rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+$DOCKER run -d --restart unless-stopped --name "$CONTAINER_NAME" \
+  -p "0.0.0.0:${HOST_PORT}:${CONTAINER_PORT}" \
+  --env-file "$ENV_FILE_ON_PRIVATE" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json \
+  -v "${ANALYSIS_OUTPUT_ON_PRIVATE}:/app/analysis-output" \
+  -v "${GCP_KEY_ON_PRIVATE}:/app/gcp-key.json:ro" \
+  "$IMAGE"
+if ! $DOCKER ps --filter "name=^/$CONTAINER_NAME$" --filter status=running --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
   echo "[private] container did not enter running state" >&2
-  docker ps -a --filter "name=^/$CONTAINER_NAME$"
-  docker logs --tail 80 "$CONTAINER_NAME" || true
+  $DOCKER ps -a --filter "name=^/$CONTAINER_NAME$"
+  $DOCKER logs --tail 80 "$CONTAINER_NAME" || true
   exit 1
 fi
 echo "[private] container is running"
-docker ps --filter "name=^/$CONTAINER_NAME$" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+$DOCKER ps --filter "name=^/$CONTAINER_NAME$" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 health_ready=0
 for attempt in $(seq 1 30); do
-  if curl -fsS --max-time 5 "http://127.0.0.1:${HOST_PORT}/en" >/dev/null; then
+  if curl -fsS --max-time 5 "http://127.0.0.1:${HOST_PORT}${HEALTH_CHECK_PATH}" >/dev/null; then
     health_ready=1
     break
   fi
@@ -162,8 +149,8 @@ for attempt in $(seq 1 30); do
   sleep 2
 done
 if [ "$health_ready" -ne 1 ]; then
-  echo "[private] health check failed on http://127.0.0.1:${HOST_PORT}/en" >&2
-  docker logs --tail 80 "$CONTAINER_NAME" || true
+  echo "[private] health check failed on http://127.0.0.1:${HOST_PORT}${HEALTH_CHECK_PATH}" >&2
+  $DOCKER logs --tail 80 "$CONTAINER_NAME" || true
   exit 1
 fi
 echo "[private] HTTP health check passed"

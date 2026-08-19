@@ -1,0 +1,16 @@
+.git
+.next
+node_modules
+coverage
+test-results
+playwright-report
+.cache
+analysis-output
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.tar
+.env*
+gcp-key.json
+.fordeploy/aws-backup
