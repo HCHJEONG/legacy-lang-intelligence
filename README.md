@@ -119,7 +119,27 @@ For the first AWS private-instance deployment, prefer `t3a.medium` if `t3a.small
 
 The AWS deployment does not depend on the existing lawvot nginx repository or ECR. Run `.fordeploy/deploy-aws.sh` from WSL; it builds, saves, copies, and loads the Docker image through the Bastion and replaces only the `cobolai` container. The container uses host port `3300` and container port `3000`. ALB and Route 53 are manually configured, so normal redeployments keep `CONFIGURE_ALB=0`.
 
+The same script automatically creates or refreshes `~/deploy-remote-repo/legacy-lang-intelligence` from `git@github.com:HCHJEONG/legacy-lang-intelligence.git`, fetches `origin/main`, and resets/cleans only that dedicated clone before building. Both `Dockerfile.aws` and the Docker build context come from the verified clone; the commit is logged and recorded in the image's `org.opencontainers.image.revision` label. Commit and push application changes before deployment: uncommitted or unpushed local changes are not build inputs. The deployment launcher itself runs from your working repository.
+
+Override `DEPLOY_BRANCH` (default `main`), `REPO_URL`, or `CLEAN_CLONE_ROOT` when needed. The clone parent must be an absolute path named `deploy-remote-repo`; the child name remains `legacy-lang-intelligence`. The script rejects symlinked checkouts, mismatched origins, and execution from inside the disposable clone. A lock prevents concurrent deployments from resetting the build source. Do not store manual work or secrets in this clone: tracked changes and untracked/ignored files are discarded on refresh. The development checkout is preserved.
+
+```bash
+bash .fordeploy/deploy-aws.sh
+# Example: deploy a pushed release branch
+DEPLOY_BRANCH=release bash .fordeploy/deploy-aws.sh
+```
+
 Runtime environment values and credentials stay outside the Docker image. On yws, runtime files live under `/home/ubuntu/cobolai`: `.env.local`, `gcp-key.json`, and `analysis-output/carddemo.sqlite`. The deployment script passes `.env.local` with `--env-file` and bind-mounts `gcp-key.json` plus `analysis-output`.
+
+Image archives are transferred directly to `/home/ubuntu/legacy-lang-intelligence/docker_images` on both the Bastion and private host. Override `REMOTE_BASE_DIR` to change this archive directory; runtime storage remains controlled separately by `APP_DIR_ON_PRIVATE`. Existing runtime files do not need to move. Remote paths must be absolute and contain only letters, digits, `_`, `.`, `/`, and `-`, without parent-directory traversal.
+
+Deployment cleanup runs as follows:
+
+- Exit handlers remove this run's local and remote tar files, including ordinary failures, and remove its local image tag. If SSH is unavailable or a process is killed abruptly, remote cleanup may wait until the next deployment.
+- On the next deployment, app-named tar files older than 24 hours are removed from the archive directory and the former `/home/ubuntu` and `/home/ubuntu/docker_images/cobolai/images` locations (only direct files, never runtime data).
+- After the HTTP health check succeeds, the private host keeps the current and immediately preceding container image IDs and removes older unused `legacy-lang-intelligence` image tags. It also removes unused dangling images carrying this deployment's AWS label. Images referenced by any container are preserved.
+- The fixed `cobolai` container is replaced each time. Stopped leftovers named `cobolai-*` are removed only if they use this application's image; a custom `CONTAINER_NAME` changes that prefix. A host lock serializes replacement and cleanup within the archive directory.
+- Failed health checks leave the failed container and previous image available for diagnosis; image retention cleanup waits for a successful deployment. Rollback is manual. Shared Docker volumes, unrelated images/containers, and builder cache are not pruned.
 
 The Docker image should contain application code only. Do not commit `.env.local`, `gcp-key.json`, image archives, SQLite databases, or copied runtime secrets.
 
