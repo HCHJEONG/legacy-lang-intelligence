@@ -148,7 +148,7 @@ ssh "${SSH_OPTS[@]}" "$BASTION_HOST" \
 set -euo pipefail
 cleanup_bastion() {
   rm -f -- "$BASTION_TAR"
-  ssh -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$PRIVATE_HOST" "rm -f -- '$PRIVATE_TAR'" || true
+  ssh -n -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$PRIVATE_HOST" "rm -f -- '$PRIVATE_TAR'" || true
 }
 trap cleanup_bastion EXIT
 # Recover archives left by interrupted older deployments (including old paths).
@@ -156,7 +156,9 @@ for archive_dir in "$REMOTE_BASE_DIR" /home/ubuntu /home/ubuntu/docker_images/co
   [ -d "$archive_dir" ] || continue
   find "$archive_dir" -maxdepth 1 -type f -name 'legacy-lang-intelligence-*.tar' -mmin +1440 -delete
 done
-ssh -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$PRIVATE_HOST" "mkdir -p -- '$REMOTE_BASE_DIR'"
+# The Bastion shell is reading this deployment from stdin. A nested SSH that
+# only runs a command must detach stdin or it can consume the remaining script.
+ssh -n -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$PRIVATE_HOST" "mkdir -p -- '$REMOTE_BASE_DIR'"
 echo "[bastion] transferring image to private host: $PRIVATE_HOST"
 scp -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$BASTION_TAR" "$PRIVATE_HOST:$PRIVATE_TAR"
 ssh -i ~/.ssh/penvotkeypair1.pem -o StrictHostKeyChecking=accept-new "$PRIVATE_HOST" \
